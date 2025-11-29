@@ -1,37 +1,35 @@
 
-# LightClip - 輕量型剪貼簿工具
+# LightClip v1.2 - 多語系剪貼簿工具（含模板與設定頁）
 
-這是一個使用 Python + PyQt5 開發的輕量剪貼簿管理工具範例專案。
+本專案是 Python 3.13 + PyQt5 的輕量剪貼簿工具，提供：
 
-## 功能特色（本範例已實作）
-- 自動監聽系統剪貼簿
-- 支援文字、圖片、網址、檔案路徑
-- JSON 本機儲存（`data/data.json`）
-- 搜尋歷史紀錄
-- 釘選常用項目避免被覆蓋
-- 類型分類（文字 / 圖片 / 網址 / 檔案 / 全部 / 釘選）
-- 系統托盤圖示（最小化至系統列）
-- 基本快捷鍵（視窗內快捷鍵）
+- 剪貼簿歷史記錄（文字 / 圖片 / 網址 / 檔案）
+- 多語系 UI（繁體中文 / English）
+- 深色 / 淺色 UI 主題與圖示主題
+- 常用模板管理（可設定 1~9 對應 Ctrl+Shift+數字）
+- JSON 本機儲存資料
+- 系統托盤常駐
+- 設定頁（語言 / 主題 / 最大筆數...）
+- 關於視窗
 
-> 注意：全域快捷鍵（在任何程式下觸發）因為各系統權限差異，範例中僅預留接口，
-> 若需要完整全域快捷鍵，可搭配 `keyboard` 或 `pynput` 等套件擴充。
+## 安裝相依套件
 
-## 安裝步驟
+```bash
+pip install -r requirements.txt
+```
 
-1. 安裝 Python 3.9+
-2. 安裝相依套件：
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. 執行程式：
-   ```bash
-   python main.py
-   ```
+## 執行原始碼
 
-## 檔案結構
+```bash
+python main.py
+```
 
-- `main.py`：程式進入點，包含 UI 與托盤整合
-- `storage.py`：JSON 儲存與讀寫邏輯
-- `models.py`：資料模型（剪貼簿項目）
-- `data/data.json`：實際儲存剪貼簿內容的檔案
+## 打包 EXE
 
+```bash
+build_exe.bat
+```
+
+會產生 `dist/LightClip/LightClip.exe`。
+
+如需安裝程式，請安裝 Inno Setup，使用 `build_installer.iss` 進行打包。

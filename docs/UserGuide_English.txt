@@ -1,0 +1,24 @@
+
+LightClip v1.2 User Guide (English)
+===================================
+
+1. When LightClip starts, it stays in the system tray and listens to clipboard changes.
+2. The main window contains two tabs:
+   - Clipboard: shows clipboard history.
+   - Templates: manage frequently used text snippets.
+3. Use the search box and type filter at the top to quickly locate past entries.
+4. For clipboard entries, you can pin, delete, copy back to clipboard, or clear history (keeping pinned items).
+5. On the Templates tab, you can add / edit / delete templates, or copy a template's content to clipboard and paste it elsewhere.
+6. Templates can be bound to indices 1~9, which are used with global hotkeys Ctrl+Shift+1..9.
+
+Settings:
+- Via the "Settings" menu, you can adjust:
+  - Interface language (Traditional Chinese / English)
+  - UI theme (Light / Dark)
+  - Icon theme (Light / Dark icon)
+  - Maximum number of history entries.
+
+About:
+- Via the "About" menu you can check the current version and a short description.
+
+Closing the main window will not quit the app; it will minimize to tray. To fully exit, right-click the tray icon and choose "Quit".

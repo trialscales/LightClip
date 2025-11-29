@@ -2,9 +2,12 @@
   "settings": {
     "max_entries": 100,
     "theme": "dark",
+    "language": "zh_TW",
+    "icon_theme": "light",
     "hotkeys": {
       "open": "Ctrl+Shift+C"
     }
   },
-  "entries": []
+  "entries": [],
+  "templates": []
 }

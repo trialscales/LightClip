@@ -1,0 +1,23 @@
+
+LightClip v1.2 安裝與打包教學
+==============================
+
+1. 安裝 Python 3.13（或相容版本）。
+2. 安裝必要套件：
+   pip install -r requirements.txt
+
+3. 直接執行原始碼：
+   python main.py
+
+4. 打包為 EXE：
+   - 確認已安裝 pyinstaller：
+     pip install pyinstaller
+   - 執行：
+     build_exe.bat
+   - 完成後可在 dist/LightClip/LightClip.exe 找到執行檔。
+
+5. 若要建立安裝程式（Setup.exe）：
+   - 安裝 Inno Setup Compiler。
+   - 使用 Inno Setup 開啟 build_installer.iss。
+   - 按 Build 產生安裝程式。
+

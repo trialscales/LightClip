@@ -10,26 +10,102 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QLineEdit, QPushButton, QLabel,
     QTextEdit, QComboBox, QSystemTrayIcon, QMenu, QAction, QMessageBox,
-    QFileDialog, QSplitter
+    QSplitter, QStyle, QTabWidget, QDialog, QDialogButtonBox, QFormLayout,
+    QSpinBox, QInputDialog
 )
 
 from app.storage import Storage
-from app.models import ClipEntry
-
+from app.models import ClipEntry, TemplateEntry
+from app.language import Language
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "data", "data.json")
 IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
+LANG_DIR = os.path.join(BASE_DIR, "languages")
 os.makedirs(IMAGE_DIR, exist_ok=True)
+
+
+def load_icon(theme: str) -> QIcon:
+    if theme == "dark":
+        path = os.path.join(BASE_DIR, "assets", "icons", "dark", "icon.ico")
+    else:
+        path = os.path.join(BASE_DIR, "assets", "icons", "light", "icon.ico")
+    if os.path.exists(path):
+        return QIcon(path)
+    return QIcon()
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, storage: Storage, parent=None):
+        super().__init__(parent)
+        self.storage = storage
+        self.setWindowTitle(Language.T("settings.title"))
+        layout = QVBoxLayout(self)
+
+        form = QFormLayout()
+
+        # Language
+        self.cmb_lang = QComboBox()
+        self.cmb_lang.addItem(Language.T("settings.language.zh"), "zh_TW")
+        self.cmb_lang.addItem(Language.T("settings.language.en"), "en_US")
+        idx = self.cmb_lang.findData(self.storage.language)
+        if idx >= 0:
+            self.cmb_lang.setCurrentIndex(idx)
+
+        # Theme
+        self.cmb_theme = QComboBox()
+        self.cmb_theme.addItem(Language.T("settings.theme.light"), "light")
+        self.cmb_theme.addItem(Language.T("settings.theme.dark"), "dark")
+        idx = self.cmb_theme.findData(self.storage.theme)
+        if idx >= 0:
+            self.cmb_theme.setCurrentIndex(idx)
+
+        # Icon theme
+        self.cmb_icon = QComboBox()
+        self.cmb_icon.addItem(Language.T("settings.icon.light"), "light")
+        self.cmb_icon.addItem(Language.T("settings.icon.dark"), "dark")
+        idx = self.cmb_icon.findData(self.storage.icon_theme)
+        if idx >= 0:
+            self.cmb_icon.setCurrentIndex(idx)
+
+        # Max entries
+        self.spin_max = QSpinBox()
+        self.spin_max.setRange(10, 10000)
+        self.spin_max.setValue(self.storage.max_entries)
+
+        form.addRow(Language.T("settings.language"), self.cmb_lang)
+        form.addRow(Language.T("settings.theme"), self.cmb_theme)
+        form.addRow(Language.T("settings.icon_theme"), self.cmb_icon)
+        form.addRow(Language.T("settings.max_entries"), self.spin_max)
+
+        layout.addLayout(form)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Ok).setText(Language.T("settings.ok"))
+        btns.button(QDialogButtonBox.Cancel).setText(Language.T("settings.cancel"))
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def apply(self):
+        lang = self.cmb_lang.currentData()
+        theme = self.cmb_theme.currentData()
+        icon_theme = self.cmb_icon.currentData()
+        max_entries = self.spin_max.value()
+
+        self.storage.language = lang
+        self.storage.theme = theme
+        self.storage.icon_theme = icon_theme
+        self.storage.max_entries = max_entries
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LightClip - 輕量剪貼簿工具")
-        self.resize(900, 600)
-
         self.storage = Storage(DATA_FILE)
+
+        # 語系載入
+        Language.load(self.storage.language, LANG_DIR)
 
         self.clipboard = QApplication.clipboard()
         self.clipboard.dataChanged.connect(self.on_clipboard_changed)
@@ -38,68 +114,100 @@ class MainWindow(QMainWindow):
 
         self.init_ui()
         self.init_tray()
-        self.refresh_list()
+        self.init_global_hotkeys()
+        self.refresh_clipboard_list()
+        self.refresh_template_list()
 
-    # ---------------- UI -----------------
+    # ---------------- UI 初始化 -----------------
 
     def init_ui(self):
+        self.setWindowTitle(Language.T("app.title"))
+        icon = load_icon(self.storage.icon_theme)
+        if not icon.isNull():
+            self.setWindowIcon(icon)
+
+        self.apply_theme()
+
+        # Menu
+        menubar = self.menuBar()
+        menu_settings = menubar.addMenu(Language.T("menu.settings"))
+        menu_about = menubar.addMenu(Language.T("menu.about"))
+
+        act_settings = QAction(Language.T("menu.settings"), self)
+        act_settings.triggered.connect(self.show_settings)
+        menu_settings.addAction(act_settings)
+
+        act_about = QAction(Language.T("menu.about"), self)
+        act_about.triggered.connect(self.show_about)
+        menu_about.addAction(act_about)
+
         central = QWidget()
         self.setCentralWidget(central)
-
         main_layout = QVBoxLayout()
         central.setLayout(main_layout)
 
-        # 搜尋列 + 類型篩選
+        # Tabs
+        self.tabs = QTabWidget()
+        main_layout.addWidget(self.tabs)
+
+        # --- Clipboard tab ---
+        clip_tab = QWidget()
+        clip_layout = QVBoxLayout()
+        clip_tab.setLayout(clip_layout)
+
         search_layout = QHBoxLayout()
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText("搜尋歷史內容、網址、檔名、標籤...")
-        self.search_edit.textChanged.connect(self.refresh_list)
+        self.search_edit.setPlaceholderText(Language.T("label.search") + " ...")
+        self.search_edit.textChanged.connect(self.refresh_clipboard_list)
 
         self.filter_combo = QComboBox()
-        self.filter_combo.addItems(["全部", "文字", "圖片", "網址", "檔案", "釘選"])
-        self.filter_combo.currentIndexChanged.connect(self.refresh_list)
+        self.filter_combo.addItems([
+            Language.T("filter.all"),
+            Language.T("filter.text"),
+            Language.T("filter.image"),
+            Language.T("filter.url"),
+            Language.T("filter.file"),
+            Language.T("filter.pinned"),
+        ])
+        self.filter_combo.currentIndexChanged.connect(self.refresh_clipboard_list)
 
-        search_layout.addWidget(QLabel("搜尋："))
+        search_layout.addWidget(QLabel(Language.T("label.search")))
         search_layout.addWidget(self.search_edit)
-        search_layout.addWidget(QLabel("類型："))
+        search_layout.addWidget(QLabel(Language.T("label.type")))
         search_layout.addWidget(self.filter_combo)
+        clip_layout.addLayout(search_layout)
 
-        main_layout.addLayout(search_layout)
-
-        # 主區域：左側清單 + 右側預覽
         splitter = QSplitter()
-        main_layout.addWidget(splitter)
+        clip_layout.addWidget(splitter)
 
         left_widget = QWidget()
         left_layout = QVBoxLayout()
         left_widget.setLayout(left_layout)
 
         self.list_widget = QListWidget()
-        self.list_widget.currentItemChanged.connect(self.on_selection_changed)
+        self.list_widget.currentItemChanged.connect(self.on_clipboard_selection_changed)
         left_layout.addWidget(self.list_widget)
 
         btn_layout = QHBoxLayout()
-        self.btn_pin = QPushButton("釘選/取消釘選")
-        self.btn_delete = QPushButton("刪除")
-        self.btn_copy = QPushButton("複製到剪貼簿")
-        self.btn_clear = QPushButton("清除歷史(保留釘選)")
+        self.btn_pin = QPushButton(Language.T("button.pin"))
+        self.btn_delete = QPushButton(Language.T("button.delete"))
+        self.btn_copy = QPushButton(Language.T("button.copy"))
+        self.btn_clear = QPushButton(Language.T("button.clear"))
 
         self.btn_pin.clicked.connect(self.toggle_pin)
-        self.btn_delete.clicked.connect(self.delete_selected)
+        self.btn_delete.clicked.connect(self.delete_selected_clipboard)
         self.btn_copy.clicked.connect(self.copy_selected_to_clipboard)
         self.btn_clear.clicked.connect(self.clear_history_keep_pinned)
 
         for b in (self.btn_pin, self.btn_delete, self.btn_copy, self.btn_clear):
             btn_layout.addWidget(b)
-
         left_layout.addLayout(btn_layout)
 
-        # 右側預覽
         right_widget = QWidget()
         right_layout = QVBoxLayout()
         right_widget.setLayout(right_layout)
 
-        self.preview_title = QLabel("預覽")
+        self.preview_title = QLabel(Language.T("preview.title"))
         self.preview_title.setStyleSheet("font-weight: bold;")
         self.preview_area = QTextEdit()
         self.preview_area.setReadOnly(True)
@@ -116,18 +224,76 @@ class MainWindow(QMainWindow):
         splitter.addWidget(right_widget)
         splitter.setSizes([400, 500])
 
-    def init_tray(self):
-        # 托盤圖示
-        self.tray = QSystemTrayIcon(self)
-        icon = self.windowIcon()
-        if icon.isNull():
-            icon = self.style().standardIcon(QStyle.SP_FileDialogInfoView) if hasattr(self, "style") else QIcon()
-        self.tray.setIcon(icon)
-        self.tray.setToolTip("LightClip - 輕量剪貼簿工具")
+        self.tabs.addTab(clip_tab, Language.T("tab.clipboard"))
 
+        # --- Templates tab ---
+        tpl_tab = QWidget()
+        tpl_layout = QVBoxLayout()
+        tpl_tab.setLayout(tpl_layout)
+
+        self.tpl_list = QListWidget()
+        tpl_layout.addWidget(self.tpl_list)
+
+        tpl_btn_layout = QHBoxLayout()
+        self.btn_tpl_add = QPushButton(Language.T("button.tpl.add"))
+        self.btn_tpl_edit = QPushButton(Language.T("button.tpl.edit"))
+        self.btn_tpl_delete = QPushButton(Language.T("button.tpl.delete"))
+        self.btn_tpl_copy = QPushButton(Language.T("button.tpl.copy"))
+        self.btn_tpl_hotkey = QPushButton(Language.T("button.tpl.hotkey"))
+
+        self.btn_tpl_add.clicked.connect(self.add_template)
+        self.btn_tpl_edit.clicked.connect(self.edit_template)
+        self.btn_tpl_delete.clicked.connect(self.delete_template)
+        self.btn_tpl_copy.clicked.connect(self.copy_template_to_clipboard)
+        self.btn_tpl_hotkey.clicked.connect(self.set_template_hotkey)
+
+        for b in (self.btn_tpl_add, self.btn_tpl_edit, self.btn_tpl_delete, self.btn_tpl_copy, self.btn_tpl_hotkey):
+            tpl_btn_layout.addWidget(b)
+        tpl_layout.addLayout(tpl_btn_layout)
+
+        self.tabs.addTab(tpl_tab, Language.T("tab.templates"))
+
+    def apply_theme(self):
+        if self.storage.theme == "dark":
+            self.setStyleSheet("""
+                QMainWindow { background-color: #2b2b2b; color: #eeeeee; }
+                QWidget { background-color: #2b2b2b; color: #eeeeee; }
+                QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox {
+                    background-color: #3c3f41;
+                    color: #eeeeee;
+                    border: 1px solid #555555;
+                }
+                QPushButton {
+                    background-color: #555555;
+                    color: #ffffff;
+                    border: 1px solid #777777;
+                    padding: 4px 8px;
+                }
+                QPushButton:hover {
+                    background-color: #666666;
+                }
+            """)
+        else:
+            self.setStyleSheet("")
+
+    # ---------------- 托盤 -----------------
+
+    def init_tray(self):
+        self.tray = QSystemTrayIcon(self)
+        icon = load_icon(self.storage.icon_theme)
+        if icon.isNull():
+            icon = self.style().standardIcon(QStyle.SP_FileDialogInfoView)
+        self.tray.setIcon(icon)
+        self.tray.setToolTip(Language.T("tray.tooltip"))
+
+        self.build_tray_menu()
+        self.tray.activated.connect(self.on_tray_activated)
+        self.tray.show()
+
+    def build_tray_menu(self):
         menu = QMenu()
-        act_show = QAction("開啟視窗", self)
-        act_quit = QAction("退出", self)
+        act_show = QAction(Language.T("tray.menu.show"), self)
+        act_quit = QAction(Language.T("tray.menu.quit"), self)
 
         act_show.triggered.connect(self.show_normal_from_tray)
         act_quit.triggered.connect(QApplication.instance().quit)
@@ -137,8 +303,25 @@ class MainWindow(QMainWindow):
         menu.addAction(act_quit)
 
         self.tray.setContextMenu(menu)
-        self.tray.activated.connect(self.on_tray_activated)
-        self.tray.show()
+
+    def init_global_hotkeys(self):
+        try:
+            import keyboard  # type: ignore
+        except Exception:
+            return
+
+        # 開啟視窗
+        keyboard.add_hotkey('ctrl+shift+c', lambda: QTimer.singleShot(0, self.show_normal_from_tray))
+
+        # 模板 1~9
+        for i in range(1, 10):
+            keyboard.add_hotkey(f'ctrl+shift+{i}', lambda idx=i: QTimer.singleShot(0, lambda: self.apply_template_hotkey(idx)))
+
+    def apply_template_hotkey(self, idx: int):
+        tpl = self.storage.find_template_by_hotkey(idx)
+        if not tpl:
+            return
+        self.clipboard.setText(tpl.content)
 
     def show_normal_from_tray(self):
         self.showNormal()
@@ -146,22 +329,26 @@ class MainWindow(QMainWindow):
         self.raise_()
 
     def on_tray_activated(self, reason):
-        if reason == QSystemTrayIcon.Trigger:  # 單擊
+        if reason == QSystemTrayIcon.Trigger:
             if self.isHidden() or self.isMinimized():
                 self.show_normal_from_tray()
             else:
                 self.hide()
 
     def closeEvent(self, event):
-        # 關閉時改為最小化到系統托盤
         if self.tray.isVisible():
             event.ignore()
             self.hide()
-            self.tray.showMessage("LightClip", "程式已縮小至系統托盤。", QSystemTrayIcon.Information, 3000)
+            self.tray.showMessage(
+                Language.T("msg.title.app"),
+                Language.T("msg.tray.hidden"),
+                QSystemTrayIcon.Information,
+                3000
+            )
         else:
             super().closeEvent(event)
 
-    # ------------- 列表與預覽 ---------------
+    # ------------- Clipboard 列表與預覽 ---------------
 
     def get_filtered_entries(self) -> List[ClipEntry]:
         keyword = self.search_edit.text().strip().lower()
@@ -169,24 +356,24 @@ class MainWindow(QMainWindow):
 
         entries = self.storage.get_entries()
 
-        # 類型篩選
         def match_type(e: ClipEntry) -> bool:
-            if f == "全部":
+            if f in (Language.T("filter.all"), ""):
                 return True
-            if f == "釘選":
+            if f == Language.T("filter.pinned"):
                 return e.pinned
             mapping = {
-                "文字": "text",
-                "圖片": "image",
-                "網址": "url",
-                "檔案": "file",
+                Language.T("filter.text"): "text",
+                Language.T("filter.image"): "image",
+                Language.T("filter.url"): "url",
+                Language.T("filter.file"): "file",
             }
             t = mapping.get(f)
+            if not t:
+                return True
             return e.type == t
 
         filtered = [e for e in entries if match_type(e)]
 
-        # 關鍵字搜尋
         if keyword:
             result = []
             for e in filtered:
@@ -198,7 +385,7 @@ class MainWindow(QMainWindow):
 
         return filtered
 
-    def refresh_list(self):
+    def refresh_clipboard_list(self):
         self._building_list = True
         self.list_widget.clear()
 
@@ -227,28 +414,28 @@ class MainWindow(QMainWindow):
                 return e
         return None
 
-    def current_entry(self) -> ClipEntry:
+    def current_clipboard_entry(self) -> ClipEntry:
         item = self.list_widget.currentItem()
         if not item:
             return None
         entry_id = item.data(Qt.UserRole)
         return self.get_entry_by_id(entry_id)
 
-    def on_selection_changed(self, current, previous):
+    def on_clipboard_selection_changed(self, current, previous):
         if self._building_list:
             return
-        entry = self.current_entry()
+        entry = self.current_clipboard_entry()
         if not entry:
             self.preview_area.clear()
             self.image_label.clear()
             self.image_label.setVisible(False)
             return
 
-        self.preview_title.setText(f"預覽 - ID {entry.id} ({entry.type})")
+        self.preview_title.setText(f"{Language.T('preview.title')} - ID {entry.id} ({entry.type})")
         self.image_label.clear()
         self.image_label.setVisible(False)
 
-        if entry.type == "text" or entry.type == "url" or entry.type == "file":
+        if entry.type in ("text", "url", "file"):
             self.preview_area.setPlainText(entry.content)
         elif entry.type == "image":
             self.preview_area.setPlainText(entry.content)
@@ -261,27 +448,32 @@ class MainWindow(QMainWindow):
         else:
             self.preview_area.setPlainText(entry.content)
 
-    # ------------- 操作按鈕 ---------------
+    # ------------- Clipboard 操作 ---------------
 
     def toggle_pin(self):
-        entry = self.current_entry()
+        entry = self.current_clipboard_entry()
         if not entry:
             return
         entry.pinned = not entry.pinned
         self.storage.update_entry(entry)
-        self.refresh_list()
+        self.refresh_clipboard_list()
 
-    def delete_selected(self):
-        entry = self.current_entry()
+    def delete_selected_clipboard(self):
+        entry = self.current_clipboard_entry()
         if not entry:
             return
-        reply = QMessageBox.question(self, "刪除確認", "確定要刪除此項目？", QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            Language.T("msg.title.delete"),
+            Language.T("msg.delete.confirm"),
+            QMessageBox.Yes | QMessageBox.No
+        )
         if reply == QMessageBox.Yes:
             self.storage.delete_entry(entry.id)
-            self.refresh_list()
+            self.refresh_clipboard_list()
 
     def copy_selected_to_clipboard(self):
-        entry = self.current_entry()
+        entry = self.current_clipboard_entry()
         if not entry:
             return
         if entry.type in ("text", "url", "file"):
@@ -291,13 +483,17 @@ class MainWindow(QMainWindow):
             if img_path and os.path.exists(img_path):
                 pix = QPixmap(img_path)
                 self.clipboard.setPixmap(pix)
-        # 不強制模擬貼上，讓使用者自行 Ctrl+V
 
     def clear_history_keep_pinned(self):
-        reply = QMessageBox.question(self, "清除確認", "確定要清除所有非釘選歷史？", QMessageBox.Yes | QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            Language.T("msg.title.clear"),
+            Language.T("msg.clear.confirm"),
+            QMessageBox.Yes | QMessageBox.No
+        )
         if reply == QMessageBox.Yes:
             self.storage.clear_history(keep_pinned=True)
-            self.refresh_list()
+            self.refresh_clipboard_list()
 
     # ------------- 剪貼簿監聽 ---------------
 
@@ -322,7 +518,6 @@ class MainWindow(QMainWindow):
         elif mime.hasUrls():
             urls = mime.urls()
             if urls:
-                # 若是本機檔案
                 if urls[0].isLocalFile():
                     entry_type = "file"
                     content = urls[0].toLocalFile()
@@ -338,7 +533,7 @@ class MainWindow(QMainWindow):
 
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_entry = ClipEntry(
-            id=self.storage.next_id(),
+            id=self.storage.next_entry_id(),
             type=entry_type,
             content=content,
             timestamp=timestamp,
@@ -347,15 +542,163 @@ class MainWindow(QMainWindow):
             extra=extra
         )
         self.storage.add_entry(new_entry)
-        # 只有在目前顯示的篩選條件符合時才刷新
-        self.refresh_list()
+        self.refresh_clipboard_list()
+
+    # ------------- 模板管理 ---------------
+
+    def refresh_template_list(self):
+        self.tpl_list.clear()
+        templates = self.storage.get_templates()
+        for t in templates:
+            label = t.name
+            if t.hotkey_index:
+                label = f"[{t.hotkey_index}] " + label
+            item = QListWidgetItem(label)
+            item.setData(Qt.UserRole, t.id)
+            self.tpl_list.addItem(item)
+
+    def current_template(self) -> TemplateEntry:
+        item = self.tpl_list.currentItem()
+        if not item:
+            return None
+        tpl_id = item.data(Qt.UserRole)
+        for t in self.storage.get_templates():
+            if t.id == tpl_id:
+                return t
+        return None
+
+    def add_template(self):
+        name, ok = QInputDialog.getText(self, Language.T("tab.templates"), Language.T("tpl.input.name"))
+        if not ok or not name.strip():
+            return
+        content, ok = QInputDialog.getMultiLineText(self, Language.T("tab.templates"), Language.T("tpl.input.content"))
+        if not ok:
+            return
+        tpl = TemplateEntry(id=self.storage.next_template_id(), name=name.strip(), content=content, hotkey_index=None)
+        self.storage.add_template(tpl)
+        self.refresh_template_list()
+
+    def edit_template(self):
+        tpl = self.current_template()
+        if not tpl:
+            return
+        name, ok = QInputDialog.getText(self, Language.T("tab.templates"), Language.T("tpl.input.name"), text=tpl.name)
+        if not ok or not name.strip():
+            return
+        content, ok = QInputDialog.getMultiLineText(self, Language.T("tab.templates"), Language.T("tpl.input.content"), text=tpl.content)
+        if not ok:
+            return
+        tpl.name = name.strip()
+        tpl.content = content
+        self.storage.update_template(tpl)
+        self.refresh_template_list()
+
+    def delete_template(self):
+        tpl = self.current_template()
+        if not tpl:
+            return
+        reply = QMessageBox.question(
+            self,
+            Language.T("msg.title.delete"),
+            Language.T("msg.delete.confirm"),
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.storage.delete_template(tpl.id)
+            self.refresh_template_list()
+
+    def copy_template_to_clipboard(self):
+        tpl = self.current_template()
+        if not tpl:
+            return
+        self.clipboard.setText(tpl.content)
+
+    def set_template_hotkey(self):
+        tpl = self.current_template()
+        if not tpl:
+            return
+        idx, ok = QInputDialog.getInt(self, Language.T("tab.templates"), Language.T("tpl.input.hotkey"), value=tpl.hotkey_index or 1, min=1, max=9)
+        if not ok:
+            # 取消視為清除快捷鍵
+            tpl.hotkey_index = None
+        else:
+            tpl.hotkey_index = idx
+        self.storage.update_template(tpl)
+        self.refresh_template_list()
+
+    # ------------- 設定 & 關於 ---------------
+
+    def show_settings(self):
+        dlg = SettingsDialog(self.storage, self)
+        if dlg.exec_() == QDialog.Accepted:
+            dlg.apply()
+            Language.load(self.storage.language, LANG_DIR)
+            self.apply_theme()
+            icon = load_icon(self.storage.icon_theme)
+            if not icon.isNull():
+                self.setWindowIcon(icon)
+                self.tray.setIcon(icon)
+            self.retranslate_ui()
+            self.refresh_clipboard_list()
+            self.refresh_template_list()
+            self.build_tray_menu()
+
+    def retranslate_ui(self):
+        self.setWindowTitle(Language.T("app.title"))
+        menubar = self.menuBar()
+        menubar.clear()
+        menu_settings = menubar.addMenu(Language.T("menu.settings"))
+        menu_about = menubar.addMenu(Language.T("menu.about"))
+
+        act_settings = QAction(Language.T("menu.settings"), self)
+        act_settings.triggered.connect(self.show_settings)
+        menu_settings.addAction(act_settings)
+
+        act_about = QAction(Language.T("menu.about"), self)
+        act_about.triggered.connect(self.show_about)
+        menu_about.addAction(act_about)
+
+        self.tabs.setTabText(0, Language.T("tab.clipboard"))
+        self.tabs.setTabText(1, Language.T("tab.templates"))
+
+        self.btn_pin.setText(Language.T("button.pin"))
+        self.btn_delete.setText(Language.T("button.delete"))
+        self.btn_copy.setText(Language.T("button.copy"))
+        self.btn_clear.setText(Language.T("button.clear"))
+        self.preview_title.setText(Language.T("preview.title"))
+
+        self.btn_tpl_add.setText(Language.T("button.tpl.add"))
+        self.btn_tpl_edit.setText(Language.T("button.tpl.edit"))
+        self.btn_tpl_delete.setText(Language.T("button.tpl.delete"))
+        self.btn_tpl_copy.setText(Language.T("button.tpl.copy"))
+        self.btn_tpl_hotkey.setText(Language.T("button.tpl.hotkey"))
+
+        self.search_edit.setPlaceholderText(Language.T("label.search") + " ...")
+        # 重建 filter combo
+        current_index = self.filter_combo.currentIndex()
+        self.filter_combo.blockSignals(True)
+        self.filter_combo.clear()
+        self.filter_combo.addItems([
+            Language.T("filter.all"),
+            Language.T("filter.text"),
+            Language.T("filter.image"),
+            Language.T("filter.url"),
+            Language.T("filter.file"),
+            Language.T("filter.pinned"),
+        ])
+        self.filter_combo.blockSignals(False)
+        if 0 <= current_index < self.filter_combo.count():
+            self.filter_combo.setCurrentIndex(current_index)
+
+    def show_about(self):
+        QMessageBox.information(self, Language.T("about.title"), Language.T("about.text"))
 
 
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
-
     win = MainWindow()
+    win.resize(960, 640)
     win.show()
     sys.exit(app.exec_())
 
