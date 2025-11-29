@@ -3,43 +3,41 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Dict
+
+_current_lang_mgr = None
+
+
+def _(key: str) -> str:
+    global _current_lang_mgr
+    if _current_lang_mgr is None:
+        return key
+    return _current_lang_mgr.get(key)
 
 
 class LanguageManager:
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
-        self.lang_dir = base_dir / "languages"
-        self.current_language = "zh_TW"
-        self.translations: dict[str, str] = {}
-        self.load_language(self.current_language)
+        self.lang_dir = self.base_dir / "languages"
+        self.lang_dir.mkdir(exist_ok=True)
+        self.current_lang = "zh_TW"
+        self.messages: Dict[str, str] = {}
 
-    def load_language(self, code: str):
-        path = self.lang_dir / f"{code}.json"
+    def set_language(self, lang_code: str) -> None:
+        self.current_lang = lang_code
+        path = self.lang_dir / f"{lang_code}.json"
         if not path.exists():
+            self.messages = {}
             return
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            self.messages = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            return
-        self.translations = data
-        self.current_language = code
+            self.messages = {}
 
-    def set_language(self, code: str):
-        self.load_language(code)
-
-    def translate(self, key: str) -> str:
-        return self.translations.get(key, key)
+    def get(self, key: str) -> str:
+        return self.messages.get(key, key)
 
 
-_lang_mgr_ref: LanguageManager | None = None
-
-
-def init_language_manager(mgr: LanguageManager):
-    global _lang_mgr_ref
-    _lang_mgr_ref = mgr
-
-
-def _(key: str) -> str:
-    if _lang_mgr_ref is None:
-        return key
-    return _lang_mgr_ref.translate(key)
+def init_language_manager(lang_mgr: LanguageManager) -> None:
+    global _current_lang_mgr
+    _current_lang_mgr = lang_mgr
