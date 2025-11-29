@@ -5,13 +5,13 @@ import datetime
 from typing import List
 
 from PyQt5.QtCore import Qt, QTimer, QSize, QUrl
-from PyQt5.QtGui import QIcon, QPixmap, QDesktopServices
+from PyQt5.QtGui import QIcon, QPixmap, QDesktopServices, QFont
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QLineEdit, QPushButton, QLabel,
     QTextEdit, QComboBox, QSystemTrayIcon, QMenu, QAction, QMessageBox,
     QSplitter, QStyle, QTabWidget, QDialog, QDialogButtonBox, QFormLayout,
-    QSpinBox, QInputDialog
+    QSpinBox, QInputDialog, QScrollArea
 )
 
 from app.storage import Storage
@@ -23,6 +23,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "data", "data.json")
 IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
 LANG_DIR = os.path.join(BASE_DIR, "languages")
+DOCS_DIR = os.path.join(BASE_DIR, "docs")
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
@@ -36,6 +37,33 @@ def load_icon(theme: str) -> QIcon:
     return QIcon()
 
 
+class TextDialog(QDialog):
+    def __init__(self, title: str, content: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        layout = QVBoxLayout(self)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        inner_layout = QVBoxLayout(inner)
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setPlainText(content)
+        font = QFont()
+        font.setPointSize(11)
+        text_edit.setFont(font)
+        inner_layout.addWidget(text_edit)
+        scroll.setWidget(inner)
+        layout.addWidget(scroll)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Close)
+        btns.rejected.connect(self.reject)
+        btns.accepted.connect(self.accept)
+        btns.button(QDialogButtonBox.Close).setText("關閉")
+        layout.addWidget(btns)
+
+
 class SettingsDialog(QDialog):
     def __init__(self, storage: Storage, parent=None):
         super().__init__(parent)
@@ -44,6 +72,8 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
+        form.setVerticalSpacing(7)
+        form.setHorizontalSpacing(7)
 
         self.cmb_lang = QComboBox()
         self.cmb_lang.addItem(Language.T("settings.language.zh"), "zh_TW")
@@ -147,6 +177,21 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout()
         central.setLayout(main_layout)
 
+        top_btn_layout = QHBoxLayout()
+        self.btn_user_guide = QPushButton(Language.T("top.user_guide"))
+        self.btn_changelog = QPushButton(Language.T("top.changelog"))
+        self.btn_issue = QPushButton(Language.T("top.issue"))
+
+        self.btn_user_guide.clicked.connect(self.open_user_guide)
+        self.btn_changelog.clicked.connect(self.open_changelog)
+        self.btn_issue.clicked.connect(self.open_report_email)
+
+        top_btn_layout.addWidget(self.btn_user_guide)
+        top_btn_layout.addWidget(self.btn_changelog)
+        top_btn_layout.addWidget(self.btn_issue)
+        top_btn_layout.addStretch()
+        main_layout.addLayout(top_btn_layout)
+
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
@@ -184,6 +229,7 @@ class MainWindow(QMainWindow):
         left_widget.setLayout(left_layout)
 
         self.list_widget = QListWidget()
+        self.list_widget.setWordWrap(True)
         self.list_widget.currentItemChanged.connect(self.on_clipboard_selection_changed)
         left_layout.addWidget(self.list_widget)
 
@@ -210,6 +256,7 @@ class MainWindow(QMainWindow):
         self.preview_title.setStyleSheet("font-weight: bold;")
         self.preview_area = QTextEdit()
         self.preview_area.setReadOnly(True)
+        self.preview_area.setLineWrapMode(QTextEdit.WidgetWidth)
 
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignCenter)
@@ -365,13 +412,12 @@ class MainWindow(QMainWindow):
         entries = self.get_filtered_entries()
         for e in entries:
             ts = e.timestamp_local
-            display = f"[{e.type}] {ts} - {e.content}"
-            if len(display) > 60:
-                display = display[:57] + "..."
-            item = QListWidgetItem(display)
-            item.setData(Qt.UserRole, e.id)
+            base = f"[{e.type}] {ts} - {e.content}"
+            item_text = base
             if e.pinned:
-                item.setText("📌 " + item.text())
+                item_text = "📌 " + item_text
+            item = QListWidgetItem(item_text)
+            item.setData(Qt.UserRole, e.id)
             self.list_widget.addItem(item)
 
         self._building_list = False
@@ -664,21 +710,44 @@ class MainWindow(QMainWindow):
         if 0 <= current_index < self.filter_combo.count():
             self.filter_combo.setCurrentIndex(current_index)
 
+        self.btn_user_guide.setText(Language.T("top.user_guide"))
+        self.btn_changelog.setText(Language.T("top.changelog"))
+        self.btn_issue.setText(Language.T("top.issue"))
+
     def show_about(self):
         text = Language.T("about.text") + "\n\n" + Language.T("about.docs")
-        QMessageBox.information(self, Language.T("about.title"), text)
+        dlg = TextDialog(Language.T("about.title"), text, self)
+        dlg.exec_()
 
     def open_report_email(self):
         QMessageBox.information(self, Language.T("menu.help.report"), Language.T("help.report.msg"))
-        url = QUrl("mailto:trialscales0430@gmail.com?subject=LightClip%20v1.3%20問題回報")
+        url = QUrl("mailto:trialscales0430@gmail.com?subject=LightClip%20v1.4%20%E5%95%8F%E9%A1%8C%E5%9B%9E%E5%A0%B1")
         QDesktopServices.openUrl(url)
+
+    def open_doc_file(self, filename_key: str, title_key: str):
+        path = os.path.join(DOCS_DIR, filename_key)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            msg = Language.T("docs.error").format(path=path)
+            QMessageBox.warning(self, Language.T(title_key), msg)
+            return
+        dlg = TextDialog(Language.T(title_key), content, self)
+        dlg.exec_()
+
+    def open_user_guide(self):
+        self.open_doc_file("操作說明.txt", "docs.user_guide.title")
+
+    def open_changelog(self):
+        self.open_doc_file("更新日誌.txt", "docs.changelog.title")
 
 
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     win = MainWindow()
-    win.resize(1000, 680)
+    win.resize(1000, 700)
     win.show()
     sys.exit(app.exec_())
 

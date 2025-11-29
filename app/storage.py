@@ -137,7 +137,7 @@ class Storage:
         self.templates = [t for t in self.templates if t.id != tpl_id]
         self._save()
 
-    def find_template_by_hotkey(self, index: int) -> Optional[TemplateEntry]:
+    def find_template_by_hotkey(self, index: int):
         for t in self.templates:
             if t.hotkey_index == index:
                 return t

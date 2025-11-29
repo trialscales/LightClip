@@ -1,5 +1,5 @@
 
-# LightClip v1.3 - 多主題剪貼簿工具（VS Code / EXE 支援）
+# LightClip v1.4 - 多主題剪貼簿工具（VS Code / EXE 支援）
 
 本專案為 Python 3.13 + PyQt5 撰寫的輕量剪貼簿工具，特色：
 
@@ -20,10 +20,6 @@ pip install -r requirements.txt
 ```
 
 ## 在 VS Code 執行
-
-1. 用 VS Code 開啟資料夾 `LightClip_v1_3`
-2. 選擇 Python 3.13 直譯器
-3. 執行：
 
 ```bash
 python main.py

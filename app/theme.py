@@ -68,7 +68,6 @@ def build_stylesheet(theme_key: str) -> str:
     text2 = t["text_secondary"]
     accent = t["accent"]
 
-    # Use single-quoted f-string to avoid nesting with outer triple-quotes
     return f'''
     * {{
         font-size: 18px;

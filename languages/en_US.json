@@ -1,5 +1,5 @@
 {
-  "app.title": "LightClip v1.3 - Lightweight Clipboard Manager",
+  "app.title": "LightClip v1.4 - Lightweight Clipboard Manager",
   "tray.tooltip": "LightClip - Lightweight Clipboard Manager",
   "tray.menu.show": "Show Window",
   "tray.menu.quit": "Quit",
@@ -7,6 +7,9 @@
   "menu.about": "About",
   "menu.help": "Help",
   "menu.help.report": "Report Issue",
+  "top.user_guide": "User Guide",
+  "top.changelog": "Changelog",
+  "top.issue": "Report Issue",
   "msg.tray.hidden": "Application is minimized to system tray.",
   "msg.title.delete": "Delete Confirmation",
   "msg.title.clear": "Clear History",
@@ -54,7 +57,10 @@
   "settings.ok": "OK",
   "settings.cancel": "Cancel",
   "about.title": "About LightClip",
-  "about.text": "LightClip v1.3\nLightweight clipboard manager with themes, multi-language and templates.",
-  "about.docs": "See docs folder for user guide and changelog.",
-  "help.report.msg": "Opening your default mail client to send email to trialscales0430@gmail.com."
+  "about.text": "LightClip v1.4 Feature Overview\n\n1. Clipboard Core\n- Automatically saves clipboard history with configurable maximum items.\n- Records text, images, URLs and file paths copied from the system.\n- Allows you to quickly re-copy any previous item from history.\n- Pin important items so they are never overwritten by new history.\n- Supports image preview (thumbnails shown in the preview area).\n- Designed for heavy copy-paste workflows and repetitive tasks.\n- Keeps file entries so you can re-copy paths even after moving files.\n- Keyword search to quickly filter history.\n- Type filter: All / Text / Image / URL / File / Pinned only.\n- Clipboard list and preview use 18px fonts with automatic line wrapping.\n\n2. Templates & Hotkeys\n- Dedicated \"Templates\" tab for managing common replies and signatures.\n- Add, edit and delete templates freely.\n- Bind templates to hotkey index 1–9.\n- Global hotkeys Ctrl+Shift+1..9 copy the corresponding template into the clipboard.\n- Global hotkey Ctrl+Shift+C toggles the main window.\n\n3. UI & Themes\n- Default 18px font size for comfortable long-term use.\n- 6 switchable themes:\n  1) Dark mode.\n  2) Dark reading mode (warm gray).\n  3) Dark cyber blue-green style.\n  4) Light mode.\n  5) Light cream mode.\n  6) Cool light mode.\n- Themes can be switched at runtime without restarting.\n- Settings form row spacing adjusted to 7px for better readability.\n\n4. Languages & Icons\n- UI available in Traditional Chinese.\n- UI available in English.\n- Separate light and dark icon sets to match themes.\n\n5. Storage & Data\n- Uses simple JSON files to store settings, history and templates.\n- Automatically creates folders and default files on first run.\n- Images are stored under data/images and referenced by path.\n- Each history entry includes local timestamp and ISO timestamp.\n\n6. System Tray\n- System tray icon support.\n- Hide window to tray instead of closing the program.\n- Tray menu offers \"Show Window\" and \"Quit\".\n\n7. Docs & Support\n- docs/操作說明.txt: user guide (Chinese).\n- docs/更新日誌.txt: changelog.\n- \"User Guide\" button reads docs file and shows it in a dialog.\n- \"Changelog\" button reads docs file and shows it in a dialog.\n- \"Report Issue\" button opens the default browser with a pre-filled email to trialscales0430@gmail.com.\n\n8. Packaging\n- Can be built into a single EXE with PyInstaller.\n- build_exe.bat helper script for Windows.\n- Inno Setup script (build_installer.iss) to create installers.\n\nThis is the full feature set of LightClip v1.4.\n",
+  "about.docs": "You can open the user guide and changelog via the top buttons or docs folder.",
+  "help.report.msg": "Opening your browser with a mailto link to trialscales0430@gmail.com.",
+  "docs.user_guide.title": "User Guide",
+  "docs.changelog.title": "Changelog",
+  "docs.error": "Failed to read file: {path}"
 }
