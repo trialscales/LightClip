@@ -1,153 +1,193 @@
 
+from __future__ import annotations
+
 import json
-import os
-from typing import List
-from app.models import ClipEntry, TemplateEntry
+import uuid
+from pathlib import Path
+from datetime import datetime
 
-DEFAULT_DATA = {
-    "settings": {
-        "max_entries": 100,
-        "theme": "dark_default",
-        "language": "zh_TW",
-        "icon_theme": "light",
-        "hotkeys": {
-            "open": "ctrl+shift+c"
+from PyQt6.QtCore import QMimeData
+from PyQt6.QtGui import QImage
+
+
+class StorageManager:
+    def __init__(self, base_dir: Path):
+        self.base_dir = base_dir
+        self.data_path = base_dir / "data" / "data.json"
+        self.image_dir = base_dir / "data" / "images"
+        self.docs_dir = base_dir / "docs"
+        self.languages_dir = base_dir / "languages"
+        self.image_dir.mkdir(parents=True, exist_ok=True)
+
+        self.clipboard_items: list[dict] = []
+        self.templates: list[dict] = []
+        self.settings: dict = {
+            "max_history": 100,
+            "language": "zh_TW",
+            "theme": "dark_default",
         }
-    },
-    "entries": [],
-    "templates": []
-}
 
+        self.load_all()
 
-class Storage:
-    def __init__(self, data_path: str):
-        self.data_path = data_path
-        self.data = json.loads(json.dumps(DEFAULT_DATA, ensure_ascii=False))
-        self.entries: List[ClipEntry] = []
-        self.templates: List[TemplateEntry] = []
-        self._load()
+    # --- load/save ---
 
-    def _load(self):
-        os.makedirs(os.path.dirname(self.data_path), exist_ok=True)
-        if not os.path.exists(self.data_path):
-            self._save()
+    def load_all(self):
+        if not self.data_path.exists():
+            self.save_all()
+            return
         try:
-            with open(self.data_path, "r", encoding="utf-8") as f:
-                self.data = json.load(f)
+            raw = json.loads(self.data_path.read_text(encoding="utf-8"))
         except Exception:
-            self.data = json.loads(json.dumps(DEFAULT_DATA, ensure_ascii=False))
-            self._save()
+            return
 
-        self.entries = [ClipEntry.from_dict(e) for e in self.data.get("entries", [])]
-        self.templates = [TemplateEntry.from_dict(t) for t in self.data.get("templates", [])]
+        self.clipboard_items = raw.get("clipboard", [])
+        self.templates = raw.get("templates", [])
+        self.settings.update(raw.get("settings", {}))
 
-    def _save(self):
-        self.data["entries"] = [e.to_dict() for e in self.entries]
-        self.data["templates"] = [t.to_dict() for t in self.templates]
-        with open(self.data_path, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, ensure_ascii=False, indent=2)
+        # sort clipboard: pinned first, then newest
+        self.clipboard_items.sort(key=lambda x: (not x.get("pinned", False), x.get("timestamp", "")), reverse=True)
 
-    @property
-    def max_entries(self) -> int:
-        return int(self.data.get("settings", {}).get("max_entries", 100))
+    def save_all(self):
+        payload = {
+            "clipboard": self.clipboard_items,
+            "templates": self.templates,
+            "settings": self.settings,
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        self.data_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    @max_entries.setter
-    def max_entries(self, value: int):
-        self.data.setdefault("settings", {})["max_entries"] = int(value)
-        self._save()
+    # --- clipboard ---
 
-    @property
-    def language(self) -> str:
-        return self.data.get("settings", {}).get("language", "zh_TW")
+    def handle_new_clipboard(self, mime: QMimeData):
+        """從 QMimeData 解析並儲存到剪貼簿歷史。"""
+        # 只收 text / image / urls
+        item = None
+        if mime.hasImage():
+            img = mime.imageData()
+            if isinstance(img, QImage):
+                item = self._save_image_clip(img)
+        elif mime.hasUrls():
+            # 以檔案或連結文字形式存
+            urls = [u.toString() for u in mime.urls()]
+            text = "\n".join(urls)
+            item = self._make_clip("url", text, full_text=text)
+        elif mime.hasText():
+            text = mime.text()
+            item = self._make_clip("text", text, full_text=text)
 
-    @language.setter
-    def language(self, code: str):
-        self.data.setdefault("settings", {})["language"] = code
-        self._save()
+        if not item:
+            return
 
-    @property
-    def icon_theme(self) -> str:
-        return self.data.get("settings", {}).get("icon_theme", "light")
+        # 插入最前面
+        self.clipboard_items.insert(0, item)
+        # 去重：同 preview 的舊項目刪掉
+        seen = set()
+        dedup = []
+        for it in self.clipboard_items:
+            key = (it.get("type"), it.get("preview"))
+            if key in seen:
+                continue
+            seen.add(key)
+            dedup.append(it)
+        self.clipboard_items = dedup
 
-    @icon_theme.setter
-    def icon_theme(self, theme: str):
-        self.data.setdefault("settings", {})["icon_theme"] = theme
-        self._save()
+        # 限制長度，但保留 pinned
+        max_history = self.settings.get("max_history", 100)
+        normal = [x for x in self.clipboard_items if not x.get("pinned")]
+        pinned = [x for x in self.clipboard_items if x.get("pinned")]
+        normal = normal[:max_history]
+        self.clipboard_items = pinned + normal
 
-    @property
-    def theme(self) -> str:
-        return self.data.get("settings", {}).get("theme", "dark_default")
+        self.save_all()
 
-    @theme.setter
-    def theme(self, theme_key: str):
-        self.data.setdefault("settings", {})["theme"] = theme_key
-        self._save()
+    def _make_clip(self, ctype: str, preview: str, full_text: str | None = None, extra: dict | None = None):
+        data = {
+            "id": str(uuid.uuid4()),
+            "type": ctype,
+            "preview": preview.strip() if isinstance(preview, str) else preview,
+            "full_text": full_text if full_text is not None else preview,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "pinned": False,
+        }
+        if extra:
+            data.update(extra)
+        return data
 
-    @property
-    def open_hotkey(self) -> str:
-        return self.data.get("settings", {}).get("hotkeys", {}).get("open", "ctrl+shift+c")
+    def _save_image_clip(self, img: QImage):
+        img_id = str(uuid.uuid4())
+        path = self.image_dir / f"{img_id}.png"
+        img.save(str(path), "PNG")
+        preview = f"[Image] {path.name}"
+        return self._make_clip("image", preview, full_text=str(path), extra={"image_path": str(path)})
 
-    @open_hotkey.setter
-    def open_hotkey(self, value: str):
-        self.data.setdefault("settings", {}).setdefault("hotkeys", {})["open"] = value.strip()
-        self._save()
+    def iter_clipboard_items(self):
+        # pinned 先、新到舊
+        return sorted(self.clipboard_items,
+                      key=lambda x: (not x.get("pinned", False), x.get("timestamp", "")),
+                      reverse=True)
 
-    def get_entries(self) -> List[ClipEntry]:
-        return list(self.entries)
+    def get_clipboard_item(self, cid: str):
+        for it in self.clipboard_items:
+            if it["id"] == cid:
+                return it
+        return None
 
-    def next_entry_id(self) -> int:
-        return (max((e.id for e in self.entries), default=0) + 1)
+    def delete_clipboard_item(self, cid: str):
+        self.clipboard_items = [x for x in self.clipboard_items if x["id"] != cid]
+        self.save_all()
 
-    def add_entry(self, entry: ClipEntry):
-        if not entry.pinned:
-            non_pinned = [e for e in self.entries if not e.pinned]
-            if len(non_pinned) >= self.max_entries and non_pinned:
-                oldest = non_pinned[-1]
-                self.entries.remove(oldest)
-        self.entries.insert(0, entry)
-        self._save()
-
-    def update_entry(self, entry: ClipEntry):
-        for i, e in enumerate(self.entries):
-            if e.id == entry.id:
-                self.entries[i] = entry
+    def toggle_pin(self, cid: str):
+        for it in self.clipboard_items:
+            if it["id"] == cid:
+                it["pinned"] = not it.get("pinned", False)
                 break
-        self._save()
+        self.save_all()
 
-    def delete_entry(self, entry_id: int):
-        self.entries = [e for e in self.entries if e.id != entry_id]
-        self._save()
-
-    def clear_history(self, keep_pinned: bool = True):
-        if keep_pinned:
-            self.entries = [e for e in self.entries if e.pinned]
+    def copy_clip_to_clipboard(self, clip: dict):
+        from PyQt6.QtWidgets import QApplication
+        cb = QApplication.clipboard()
+        ctype = clip.get("type")
+        if ctype == "text" or ctype == "url":
+            cb.setText(clip.get("full_text", ""))
+        elif ctype == "image":
+            path = Path(clip.get("image_path", ""))
+            if path.exists():
+                img = QImage(str(path))
+                cb.setImage(img)
         else:
-            self.entries = []
-        self._save()
+            cb.setText(clip.get("full_text", ""))
 
-    def get_templates(self) -> List[TemplateEntry]:
-        return list(self.templates)
+    # --- templates ---
 
-    def next_template_id(self) -> int:
-        return (max((t.id for t in self.templates), default=0) + 1)
+    def _next_template_id(self) -> int:
+        if not self.templates:
+            return 1
+        return max(t["id"] for t in self.templates) + 1
 
-    def add_template(self, tpl: TemplateEntry):
+    def add_template(self, name: str, content: str):
+        tpl = {
+            "id": self._next_template_id(),
+            "name": name,
+            "content": content,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
         self.templates.append(tpl)
-        self._save()
 
-    def update_template(self, tpl: TemplateEntry):
-        for i, t in enumerate(self.templates):
-            if t.id == tpl.id:
-                self.templates[i] = tpl
-                break
-        self._save()
-
-    def delete_template(self, tpl_id: int):
-        self.templates = [t for t in self.templates if t.id != tpl_id]
-        self._save()
-
-    def find_template_by_hotkey(self, index: int):
+    def get_template(self, tid: int):
         for t in self.templates:
-            if t.hotkey_index == index:
+            if t["id"] == tid:
                 return t
         return None
+
+    def update_template(self, tid: int, name: str, content: str):
+        for t in self.templates:
+            if t["id"] == tid:
+                t["name"] = name
+                t["content"] = content
+                t["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                break
+
+    def delete_template(self, tid: int):
+        self.templates = [t for t in self.templates if t["id"] != tid]
+
+    # --- misc ---

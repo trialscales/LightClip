@@ -1,13 +1,4 @@
-
 @echo off
-echo Building LightClip v1.5 EXE...
-
-if exist build rmdir /s /q build
-if exist dist rmdir /s /q dist
-
-pyinstaller LightClip.spec
-
-echo.
-echo Build finished.
-echo EXE 在 dist\LightClip\LightClip.exe
+REM Build LightClip v1.6 EXE using PyInstaller
+pyinstaller --noconfirm --onefile --windowed --name "LightClip_v1_6" main.py
 pause
