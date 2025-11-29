@@ -9,13 +9,13 @@ class ThemeManager:
         self.base_dir = base_dir
         self.themes = {
             "dark_default": {
-                "name": "Dark · 深灰黑",
-                "bg": "#1E1E1E",
-                "bg_alt": "#252525",
-                "panel": "#2C2C2C",
-                "text": "#E4E4E4",
-                "text_sub": "#A0A0A0",
-                "accent": "#4DA8DA",
+                "name": "Dark · Obsidian",
+                "bg": "#121212",
+                "bg_alt": "#1E1E1E",
+                "panel": "#1F1F23",
+                "text": "#F5F5F5",
+                "text_sub": "#A1A1AA",
+                "accent": "#4D9FFF",
             },
             "dark_reading": {
                 "name": "Dark · 閱讀模式",
@@ -87,36 +87,52 @@ class ThemeManager:
             color: {text};
             font-size: 18px;
         }}
+        QMainWindow {{
+            background-color: {bg};
+        }}
         QTabWidget::pane {{
             border: 1px solid {bg_alt};
+            border-radius: 10px;
+            margin-top: 4px;
         }}
         QTabBar::tab {{
             background: {bg_alt};
-            padding: 6px 14px;
+            padding: 8px 18px;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            margin-right: 2px;
         }}
         QTabBar::tab:selected {{
             background: {panel};
         }}
         QListWidget {{
-            background: {panel};
-            border: 1px solid {bg_alt};
+            background: transparent;
+            border: none;
         }}
         QTextEdit, QLineEdit {{
             background: {panel};
             border: 1px solid {bg_alt};
+            border-radius: 8px;
+            padding: 6px 10px;
         }}
         QPushButton {{
             background-color: {accent};
             border: none;
-            padding: 6px 12px;
+            padding: 8px 14px;
             color: #ffffff;
+            border-radius: 8px;
         }}
         QPushButton:hover {{
-            opacity: 0.9;
+            background-color: {text_sub};
         }}
         QMenu {{
             background-color: {bg_alt};
             color: {text};
+            border: 1px solid {panel};
+            border-radius: 8px;
+        }}
+        QMenu::item {{
+            padding: 6px 16px;
         }}
         QMenu::item:selected {{
             background: {panel};
@@ -124,5 +140,15 @@ class ThemeManager:
         QSystemTrayIcon {{
             background: {bg_alt};
         }}
+        QLabel#metaLabel {{
+            color: {text_sub};
+            font-size: 14px;
+        }}
+        QFrame#CardFrame {{
+            background-color: {panel};
+            border-radius: 10px;
+            border: 1px solid {bg_alt};
+        }}
         """
+
         return css

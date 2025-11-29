@@ -6,13 +6,7 @@ import uuid
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import (
-    QAction,
-    QIcon,
-    QKeySequence,
-    QShortcut,
-    QPixmap,
-)
+from PyQt6.QtGui import QAction, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -31,7 +25,6 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QComboBox,
     QMessageBox,
-    QFileDialog,
     QSystemTrayIcon,
     QMenu,
     QStyle,
@@ -50,14 +43,92 @@ from app.theme import ThemeManager
 from app.cloud_sync import CloudSync
 from app.google_sync import GoogleDriveSync
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 
 
-def ensure_dirs() -> Path:
-    base = Path(__file__).resolve().parent
-    (base / "data").mkdir(exist_ok=True)
-    (base / "cloud").mkdir(exist_ok=True)
-    return base
+def ensure_base_dir() -> Path:
+    # 單 EXE 或原始碼都使用同一個目錄邏輯：以 main.py 所在路徑為基準
+    return Path(__file__).resolve().parent
+
+
+# --------- UI 組件：剪貼簿卡片 ---------
+
+
+class ClipCard(QWidget):
+    """剪貼簿列表中的卡片式項目，支援自動換行與展開/收合。"""
+
+    def __init__(self, parent, text: str, meta: str, pinned: bool, can_expand: bool):
+        super().__init__(parent)
+        self._expanded = False
+        self._can_expand = can_expand
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(8, 6, 8, 6)
+        root.setSpacing(4)
+
+        # 卡片外框
+        frame = QFrame(self)
+        frame.setObjectName("CardFrame")
+        frame_layout = QVBoxLayout(frame)
+        frame_layout.setContentsMargins(10, 8, 10, 8)
+        frame_layout.setSpacing(4)
+
+        # 第一行：釘選 + 展開按鈕
+        top_row = QHBoxLayout()
+        self.btn_pin = QPushButton(frame)
+        self.btn_pin.setFlat(True)
+        self.btn_pin.setIconSize(QSize(20, 20))
+        top_row.addWidget(self.btn_pin)
+        top_row.addStretch(1)
+
+        self.btn_expand = QPushButton("展開", frame)
+        self.btn_expand.setFlat(True)
+        self.btn_expand.setVisible(can_expand)
+        top_row.addWidget(self.btn_expand)
+        frame_layout.addLayout(top_row)
+
+        # 內容文字
+        self.lbl_text = QLabel(text, frame)
+        self.lbl_text.setWordWrap(True)
+        self.lbl_text.setMinimumHeight(24)
+        frame_layout.addWidget(self.lbl_text)
+
+        # meta 資訊
+        self.lbl_meta = QLabel(meta, frame)
+        self.lbl_meta.setObjectName("metaLabel")
+        frame_layout.addWidget(self.lbl_meta)
+
+        root.addWidget(frame)
+
+        self.set_pinned(pinned)
+        self._set_collapsed_height()
+
+        self.btn_expand.clicked.connect(self.toggle_expand)
+
+    def set_pinned(self, pinned: bool):
+        icon_name = "icon_pin_filled.svg" if pinned else "icon_pin_outline.svg"
+        icon = QIcon(str(ensure_base_dir() / "assets" / icon_name))
+        self.btn_pin.setIcon(icon)
+
+    def _set_collapsed_height(self):
+        # 限制為約 3 行高度
+        fm = self.lbl_text.fontMetrics()
+        max_h = fm.lineSpacing() * 3 + 8
+        self.lbl_text.setMaximumHeight(max_h)
+
+    def toggle_expand(self):
+        if not self._can_expand:
+            return
+        self._expanded = not self._expanded
+        if self._expanded:
+            self.lbl_text.setMaximumHeight(16777215)  # 無限制
+            self.btn_expand.setText("收合")
+        else:
+            self._set_collapsed_height()
+            self.btn_expand.setText("展開")
+
+
+# --------- 設定視窗與模板編輯 ---------
 
 
 class SettingsDialog(QDialog):
@@ -144,7 +215,7 @@ class TemplateEditorDialog(QDialog):
         self.edit_name.setText(name)
         self.edit_content = QTextEdit(self)
         self.edit_content.setPlainText(content)
-        self.edit_content.setMinimumHeight(200)
+        self.edit_content.setMinimumHeight(220)
 
         layout.addWidget(self.edit_name)
         layout.addWidget(self.edit_content)
@@ -163,6 +234,9 @@ class TemplateEditorDialog(QDialog):
         return self.edit_name.text().strip(), self.edit_content.toPlainText()
 
 
+# --------- 主視窗 ---------
+
+
 class LightClipWindow(QMainWindow):
     def __init__(self, storage: StorageManager, lang_mgr: LanguageManager, theme_mgr: ThemeManager, base_dir: Path):
         super().__init__()
@@ -177,7 +251,7 @@ class LightClipWindow(QMainWindow):
         init_language_manager(lang_mgr)
 
         self.setWindowTitle(_("app.title"))
-        self.resize(900, 600)
+        self.resize(980, 640)
 
         icon_path = self.base_dir / "assets" / "lightclip_logo.png"
         if icon_path.exists():
@@ -193,29 +267,36 @@ class LightClipWindow(QMainWindow):
         central = QWidget(self)
         self.setCentralWidget(central)
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(8, 8, 8, 8)
-        root_layout.setSpacing(6)
+        root_layout.setContentsMargins(10, 10, 10, 10)
+        root_layout.setSpacing(8)
 
-        # top bar: title + spacer + cloud icon + three-dot menu
+        # top bar
         top_bar = QHBoxLayout()
         self.lbl_title = QLabel("LightClip", self)
+        self.lbl_title.setStyleSheet("font-size: 18px; font-weight: 600;")
         top_bar.addWidget(self.lbl_title)
         top_bar.addStretch(1)
 
         # cloud sync icon button
         self.btn_cloud = QPushButton(self)
-        cloud_icon_path = self.base_dir / "assets" / "cloud_sync.png"
+        cloud_icon_path = self.base_dir / "assets" / "icon_cloud.svg"
         if cloud_icon_path.exists():
             self.btn_cloud.setIcon(QIcon(str(cloud_icon_path)))
+            self.btn_cloud.setIconSize(QSize(24, 24))
         else:
             self.btn_cloud.setText("☁")
-        self.btn_cloud.setFixedSize(32, 32)
+        self.btn_cloud.setFixedSize(36, 32)
+        self.btn_cloud.setFlat(True)
         self.btn_cloud.clicked.connect(self.on_cloud_sync_clicked)
         top_bar.addWidget(self.btn_cloud)
 
         # three-dot menu button
-        self.btn_menu = QPushButton("⋯", self)
-        self.btn_menu.setFixedSize(32, 32)
+        self.btn_menu = QPushButton(self)
+        more_icon = QIcon(str(self.base_dir / "assets" / "icon_more.svg"))
+        self.btn_menu.setIcon(more_icon)
+        self.btn_menu.setIconSize(QSize(20, 20))
+        self.btn_menu.setFixedSize(36, 32)
+        self.btn_menu.setFlat(True)
         self.btn_menu.clicked.connect(self.show_main_menu)
         top_bar.addWidget(self.btn_menu)
 
@@ -242,17 +323,43 @@ class LightClipWindow(QMainWindow):
         lbl = QLabel(_("ui.search.placeholder"), self)
         self.edit_search = QLineEdit(self)
         self.edit_search.setPlaceholderText(_("ui.search.placeholder"))
-        self.edit_search.textChanged.connect(self.refresh_clipboard_list)
+        self.edit_search.textChanged.connect(self.refresh_clipboard_lists)
         search_row.addWidget(lbl)
         search_row.addWidget(self.edit_search)
         layout.addLayout(search_row)
 
-        # list + right panel
+        # main row: left lists + right preview
         row = QHBoxLayout()
-        self.clip_list = QListWidget(self)
-        self.clip_list.currentItemChanged.connect(self.update_clip_preview)
-        row.addWidget(self.clip_list, 2)
 
+        left_col = QVBoxLayout()
+
+        # pincard section
+        pin_header_row = QHBoxLayout()
+        self.btn_toggle_pin_section = QPushButton("📌 釘選項目（展開）", self)
+        self.btn_toggle_pin_section.setCheckable(True)
+        self.btn_toggle_pin_section.setChecked(True)
+        self.btn_toggle_pin_section.clicked.connect(self.toggle_pin_section)
+        pin_header_row.addWidget(self.btn_toggle_pin_section)
+        pin_header_row.addStretch(1)
+        left_col.addLayout(pin_header_row)
+
+        self.list_pinned = QListWidget(self)
+        self.list_pinned.setSpacing(6)
+        self.list_pinned.currentItemChanged.connect(self.on_clip_selection_changed)
+        left_col.addWidget(self.list_pinned)
+
+        # normal section label
+        lbl_history = QLabel("剪貼簿歷史", self)
+        left_col.addWidget(lbl_history)
+
+        self.clip_list = QListWidget(self)
+        self.clip_list.setSpacing(6)
+        self.clip_list.currentItemChanged.connect(self.on_clip_selection_changed)
+        left_col.addWidget(self.clip_list, 1)
+
+        row.addLayout(left_col, 2)
+
+        # right preview panel
         right_panel = QVBoxLayout()
         btn_row = QHBoxLayout()
         self.btn_clip_copy = QPushButton(_("clipboard.copy"), self)
@@ -270,7 +377,7 @@ class LightClipWindow(QMainWindow):
 
         self.clip_preview_image = QLabel(self)
         self.clip_preview_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.clip_preview_image.setMinimumHeight(180)
+        self.clip_preview_image.setMinimumHeight(200)
         self.clip_preview_image.setFrameShape(QFrame.Shape.StyledPanel)
         right_panel.addWidget(self.clip_preview_image, 2)
 
@@ -281,7 +388,12 @@ class LightClipWindow(QMainWindow):
         self.btn_clip_delete.clicked.connect(self.delete_selected_clip)
         self.btn_clip_pin.clicked.connect(self.toggle_pin_selected_clip)
 
-        self.refresh_clipboard_list()
+        self.refresh_clipboard_lists()
+
+    def toggle_pin_section(self):
+        expanded = self.btn_toggle_pin_section.isChecked()
+        self.list_pinned.setVisible(expanded)
+        self.btn_toggle_pin_section.setText("📌 釘選項目（展開）" if expanded else "📌 釘選項目（收合）")
 
     def _init_templates_tab(self):
         layout = QVBoxLayout(self.tab_templates)
@@ -305,7 +417,7 @@ class LightClipWindow(QMainWindow):
 
         self.tpl_preview = QTextEdit(self)
         self.tpl_preview.setReadOnly(True)
-        self.tpl_preview.setFixedHeight(120)
+        self.tpl_preview.setFixedHeight(140)
         layout.addWidget(self.tpl_preview)
 
         self.btn_tpl_add.clicked.connect(self.add_template)
@@ -316,26 +428,58 @@ class LightClipWindow(QMainWindow):
 
         self.refresh_template_list()
 
-    # --- clipboard actions ---
-    def refresh_clipboard_list(self):
+    # --- clipboard helpers ---
+
+    def _build_card_for_item(self, item_dict) -> QWidget:
+        text = item_dict.get("preview") or item_dict.get("full_text", "")
+        text = text.strip()
+        if not text:
+            text = "(空內容)"
+        # meta: 可以之後擴充為時間戳，這裡先放類型
+        meta = f"type: {item_dict.get('type', 'text')}"
+        can_expand = len(text) > 80
+        card = ClipCard(self, text, meta, bool(item_dict.get("pinned")), can_expand)
+        return card
+
+    def refresh_clipboard_lists(self):
         term = self.edit_search.text().strip().lower()
+        self.list_pinned.clear()
         self.clip_list.clear()
-        for item in self.storage.clipboard_items:
-            text = item.get("preview", "") or item.get("full_text", "")
-            if term and term not in text.lower():
-                continue
-            display = ("📌 " if item.get("pinned") else "") + text
-            lw_item = QListWidgetItem(display, self.clip_list)
-            lw_item.setData(Qt.ItemDataRole.UserRole, item.get("id"))
+
+        pinned_items = [c for c in self.storage.clipboard_items if c.get("pinned")]
+        normal_items = [c for c in self.storage.clipboard_items if not c.get("pinned")]
+
+        def add_items_to_list(target_list: QListWidget, items):
+            for item in items:
+                text = item.get("preview", "") or item.get("full_text", "")
+                if term and term not in text.lower():
+                    continue
+                lw_item = QListWidgetItem(target_list)
+                lw_item.setData(Qt.ItemDataRole.UserRole, item.get("id"))
+                card = self._build_card_for_item(item)
+                # 釘選按鈕行為
+                card.btn_pin.clicked.connect(lambda checked=False, cid=item.get("id"): self.toggle_pin_by_id(cid))
+                target_list.setItemWidget(lw_item, card)
+                lw_item.setSizeHint(card.sizeHint())
+
+        add_items_to_list(self.list_pinned, pinned_items)
+        add_items_to_list(self.clip_list, normal_items)
+
+    def on_clip_selection_changed(self, current, previous):
+        if current is None:
+            return
+        cid = current.data(Qt.ItemDataRole.UserRole)
+        self.update_clip_preview_by_id(cid)
 
     def get_selected_clip_id(self):
-        cur = self.clip_list.currentItem()
-        if not cur:
+        cur = self.list_pinned.currentItem()
+        if cur is None:
+            cur = self.clip_list.currentItem()
+        if cur is None:
             return None
         return cur.data(Qt.ItemDataRole.UserRole)
 
-    def update_clip_preview(self):
-        cid = self.get_selected_clip_id()
+    def update_clip_preview_by_id(self, cid: str | None):
         self.clip_preview_text.clear()
         self.clip_preview_image.clear()
         if not cid:
@@ -372,7 +516,7 @@ class LightClipWindow(QMainWindow):
             return
         self.storage.delete_clipboard_item(cid)
         self.storage.save_all()
-        self.refresh_clipboard_list()
+        self.refresh_clipboard_lists()
         self.clip_preview_text.clear()
         self.clip_preview_image.clear()
 
@@ -380,12 +524,15 @@ class LightClipWindow(QMainWindow):
         cid = self.get_selected_clip_id()
         if not cid:
             return
+        self.toggle_pin_by_id(cid)
+
+    def toggle_pin_by_id(self, cid: str):
         clip = self.storage.get_clipboard_item(cid)
         if not clip:
             return
         clip["pinned"] = not bool(clip.get("pinned"))
         self.storage.save_all()
-        self.refresh_clipboard_list()
+        self.refresh_clipboard_lists()
 
     # --- templates actions ---
     def refresh_template_list(self):
@@ -465,9 +612,14 @@ class LightClipWindow(QMainWindow):
     # --- main menu / tray / cloud ---
     def show_main_menu(self):
         menu = QMenu(self)
-        act_settings = QAction(_("menu.settings"), self)
-        act_about = QAction(_("menu.about"), self)
-        act_manual = QAction(_("menu.manual"), self)
+
+        icon_settings = QIcon(str(self.base_dir / "assets" / "icon_settings.svg"))
+        icon_info = QIcon(str(self.base_dir / "assets" / "icon_info.svg"))
+        icon_help = QIcon(str(self.base_dir / "assets" / "icon_help.svg"))
+
+        act_settings = QAction(icon_settings, _("menu.settings"), self)
+        act_about = QAction(icon_info, _("menu.about"), self)
+        act_manual = QAction(icon_help, _("menu.manual"), self)
         act_changelog = QAction(_("menu.changelog"), self)
         act_report = QAction(_("menu.report"), self)
         menu.addAction(act_settings)
@@ -504,7 +656,7 @@ class LightClipWindow(QMainWindow):
         edit.setReadOnly(True)
         edit.setPlainText(text)
         lay.addWidget(edit)
-        dlg.resize(600, 500)
+        dlg.resize(640, 520)
         dlg.exec()
 
     def show_changelog(self):
@@ -517,7 +669,7 @@ class LightClipWindow(QMainWindow):
         edit.setReadOnly(True)
         edit.setPlainText(text)
         lay.addWidget(edit)
-        dlg.resize(600, 500)
+        dlg.resize(640, 520)
         dlg.exec()
 
     def open_report_email(self):
@@ -584,7 +736,7 @@ class LightClipWindow(QMainWindow):
 
 
 def main():
-    base = ensure_dirs()
+    base = ensure_base_dir()
     app = QApplication(sys.argv)
 
     storage = StorageManager(base)
