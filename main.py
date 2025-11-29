@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 
 from PyQt6.QtCore import Qt, QTimer, QSize
-from PyQt6.QtGui import QAction, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QListWidget, QListWidgetItem, QPushButton, QLabel,
@@ -14,14 +14,13 @@ from PyQt6.QtWidgets import (
     QMessageBox, QFileDialog, QSystemTrayIcon, QMenu, QStyle, QFrame,
     QScrollArea, QSizePolicy
 )
-from PyQt6.QtWidgets import QShortcut
 
 from app.storage import StorageManager
-from app.language import LanguageManager, _
+from app.language import LanguageManager, _, init_language_manager
 from app.theme import ThemeManager
 from app.cloud_sync import CloudSync
 
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 
 
 class TextViewerDialog(QDialog):
@@ -69,7 +68,7 @@ class TemplateEditorDialog(QDialog):
         preview_label = QLabel(_("template.preview"), self)
         self.preview_edit = QTextEdit(self)
         self.preview_edit.setReadOnly(True)
-        self.preview_edit.setFixedHeight(70)
+        self.preview_edit.setFixedHeight(100)
         font = self.preview_edit.font()
         font.setPointSize(13)
         self.preview_edit.setFont(font)
@@ -161,8 +160,12 @@ class SettingsDialog(QDialog):
 
     def apply(self):
         self.storage.settings["max_history"] = self.spin_history.value()
-        self.lang_mgr.set_language(self.combo_lang.currentData())
-        self.theme_mgr.set_theme(self.combo_theme.currentData())
+        lang_code = self.combo_lang.currentData()
+        theme_key = self.combo_theme.currentData()
+        self.storage.settings["language"] = lang_code
+        self.storage.settings["theme"] = theme_key
+        self.lang_mgr.set_language(lang_code)
+        self.theme_mgr.set_theme(theme_key)
         self.storage.save_all()
 
 
@@ -323,11 +326,19 @@ class LightClipWindow(QMainWindow):
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
-        # 預覽區
-        self.clip_preview = QTextEdit(self)
-        self.clip_preview.setReadOnly(True)
-        self.clip_preview.setPlaceholderText(_("clipboard.preview_placeholder"))
-        layout.addWidget(self.clip_preview)
+        # 預覽區（支援文字與圖片）
+        self.clip_preview_text = QTextEdit(self)
+        self.clip_preview_text.setReadOnly(True)
+        self.clip_preview_text.setPlaceholderText(_("clipboard.preview_placeholder"))
+
+        from PyQt6.QtWidgets import QLabel
+        self.clip_preview_image = QLabel(self)
+        self.clip_preview_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.clip_preview_image.setVisible(False)
+        self.clip_preview_image.setMinimumHeight(180)
+
+        layout.addWidget(self.clip_preview_text)
+        layout.addWidget(self.clip_preview_image)
 
         self.clip_list.currentItemChanged.connect(self.update_clip_preview)
 
@@ -337,6 +348,7 @@ class LightClipWindow(QMainWindow):
         # 模板列表
         self.tpl_list = QListWidget(self)
         self.tpl_list.itemDoubleClicked.connect(self.edit_selected_template)
+        self.tpl_list.itemActivated.connect(self.edit_selected_template)
         layout.addWidget(self.tpl_list)
 
         # 操作列
@@ -423,13 +435,33 @@ class LightClipWindow(QMainWindow):
     def update_clip_preview(self):
         cid = self.get_selected_clip_id()
         if not cid:
-            self.clip_preview.clear()
+            self.clip_preview_text.clear()
+            self.clip_preview_image.clear()
+            self.clip_preview_image.setVisible(False)
             return
         clip = self.storage.get_clipboard_item(cid)
         if not clip:
-            self.clip_preview.clear()
+            self.clip_preview_text.clear()
+            self.clip_preview_image.clear()
+            self.clip_preview_image.setVisible(False)
             return
-        self.clip_preview.setPlainText(clip.get("full_text", clip.get("preview", "")))
+        ctype = clip.get("type")
+        if ctype == "image":
+            from PyQt6.QtGui import QPixmap
+            from pathlib import Path as _Path
+            path = _Path(clip.get("image_path", ""))
+            if path.exists():
+                pix = QPixmap(str(path))
+                self.clip_preview_image.setPixmap(pix.scaledToHeight(260, Qt.TransformationMode.SmoothTransformation))
+                self.clip_preview_image.setVisible(True)
+            else:
+                self.clip_preview_image.clear()
+                self.clip_preview_image.setVisible(False)
+            self.clip_preview_text.setPlainText(clip.get("full_text", clip.get("preview", "")))
+        else:
+            self.clip_preview_image.clear()
+            self.clip_preview_image.setVisible(False)
+            self.clip_preview_text.setPlainText(clip.get("full_text", clip.get("preview", "")))
 
     # --- 模板邏輯 ---
 
@@ -587,6 +619,13 @@ def main():
     storage = StorageManager(base)
     lang_mgr = LanguageManager(base)
     theme_mgr = ThemeManager(base)
+
+    # 套用已儲存的語言與主題到管理器
+    lang_code = storage.settings.get("language", "zh_TW")
+    theme_key = storage.settings.get("theme", "dark_default")
+    lang_mgr.set_language(lang_code)
+    theme_mgr.set_theme(theme_key)
+    init_language_manager(lang_mgr)
 
     win = LightClipWindow(storage, lang_mgr, theme_mgr)
     win.show()
