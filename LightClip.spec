@@ -14,6 +14,7 @@ a = Analysis(
         ('app/*', 'app'),
         ('assets/icons/light/icon.ico', 'assets/icons/light'),
         ('assets/icons/dark/icon.ico', 'assets/icons/dark'),
+        ('cloud/*', 'cloud'),
     ],
     hiddenimports=[],
     hookspath=[],

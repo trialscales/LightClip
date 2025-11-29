@@ -1,7 +1,7 @@
 
 import json
 import os
-from typing import List, Optional
+from typing import List
 from app.models import ClipEntry, TemplateEntry
 
 DEFAULT_DATA = {
@@ -11,7 +11,7 @@ DEFAULT_DATA = {
         "language": "zh_TW",
         "icon_theme": "light",
         "hotkeys": {
-            "open": "Ctrl+Shift+C"
+            "open": "ctrl+shift+c"
         }
     },
     "entries": [],
@@ -81,6 +81,15 @@ class Storage:
     @theme.setter
     def theme(self, theme_key: str):
         self.data.setdefault("settings", {})["theme"] = theme_key
+        self._save()
+
+    @property
+    def open_hotkey(self) -> str:
+        return self.data.get("settings", {}).get("hotkeys", {}).get("open", "ctrl+shift+c")
+
+    @open_hotkey.setter
+    def open_hotkey(self, value: str):
+        self.data.setdefault("settings", {}).setdefault("hotkeys", {})["open"] = value.strip()
         self._save()
 
     def get_entries(self) -> List[ClipEntry]:

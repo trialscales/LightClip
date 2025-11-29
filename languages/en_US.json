@@ -1,5 +1,5 @@
 {
-  "app.title": "LightClip v1.4 - Lightweight Clipboard Manager",
+  "app.title": "LightClip v1.5 - Lightweight Clipboard Manager",
   "tray.tooltip": "LightClip - Lightweight Clipboard Manager",
   "tray.menu.show": "Show Window",
   "tray.menu.quit": "Quit",
@@ -10,6 +10,10 @@
   "top.user_guide": "User Guide",
   "top.changelog": "Changelog",
   "top.issue": "Report Issue",
+  "top.cloud": "Cloud Sync",
+  "top.settings": "Settings",
+  "top.about": "About",
+  "top.help": "Help",
   "msg.tray.hidden": "Application is minimized to system tray.",
   "msg.title.delete": "Delete Confirmation",
   "msg.title.clear": "Clear History",
@@ -44,6 +48,7 @@
   "settings.theme": "UI Theme",
   "settings.icon_theme": "Icon Theme",
   "settings.max_entries": "Max history entries",
+  "settings.open_hotkey": "Open LightClip hotkey",
   "settings.language.zh": "Traditional Chinese",
   "settings.language.en": "English",
   "settings.theme.dark_default": "Dark Mode",
@@ -57,10 +62,12 @@
   "settings.ok": "OK",
   "settings.cancel": "Cancel",
   "about.title": "About LightClip",
-  "about.text": "LightClip v1.4 Feature Overview\n\n1. Clipboard Core\n- Automatically saves clipboard history with configurable maximum items.\n- Records text, images, URLs and file paths copied from the system.\n- Allows you to quickly re-copy any previous item from history.\n- Pin important items so they are never overwritten by new history.\n- Supports image preview (thumbnails shown in the preview area).\n- Designed for heavy copy-paste workflows and repetitive tasks.\n- Keeps file entries so you can re-copy paths even after moving files.\n- Keyword search to quickly filter history.\n- Type filter: All / Text / Image / URL / File / Pinned only.\n- Clipboard list and preview use 18px fonts with automatic line wrapping.\n\n2. Templates & Hotkeys\n- Dedicated \"Templates\" tab for managing common replies and signatures.\n- Add, edit and delete templates freely.\n- Bind templates to hotkey index 1–9.\n- Global hotkeys Ctrl+Shift+1..9 copy the corresponding template into the clipboard.\n- Global hotkey Ctrl+Shift+C toggles the main window.\n\n3. UI & Themes\n- Default 18px font size for comfortable long-term use.\n- 6 switchable themes:\n  1) Dark mode.\n  2) Dark reading mode (warm gray).\n  3) Dark cyber blue-green style.\n  4) Light mode.\n  5) Light cream mode.\n  6) Cool light mode.\n- Themes can be switched at runtime without restarting.\n- Settings form row spacing adjusted to 7px for better readability.\n\n4. Languages & Icons\n- UI available in Traditional Chinese.\n- UI available in English.\n- Separate light and dark icon sets to match themes.\n\n5. Storage & Data\n- Uses simple JSON files to store settings, history and templates.\n- Automatically creates folders and default files on first run.\n- Images are stored under data/images and referenced by path.\n- Each history entry includes local timestamp and ISO timestamp.\n\n6. System Tray\n- System tray icon support.\n- Hide window to tray instead of closing the program.\n- Tray menu offers \"Show Window\" and \"Quit\".\n\n7. Docs & Support\n- docs/操作說明.txt: user guide (Chinese).\n- docs/更新日誌.txt: changelog.\n- \"User Guide\" button reads docs file and shows it in a dialog.\n- \"Changelog\" button reads docs file and shows it in a dialog.\n- \"Report Issue\" button opens the default browser with a pre-filled email to trialscales0430@gmail.com.\n\n8. Packaging\n- Can be built into a single EXE with PyInstaller.\n- build_exe.bat helper script for Windows.\n- Inno Setup script (build_installer.iss) to create installers.\n\nThis is the full feature set of LightClip v1.4.\n",
-  "about.docs": "You can open the user guide and changelog via the top buttons or docs folder.",
-  "help.report.msg": "Opening your browser with a mailto link to trialscales0430@gmail.com.",
+  "about.text": "LightClip v1.5 Feature Overview\n\n1. Clipboard Core\n- Automatically saves clipboard history with configurable maximum items.\n- Records text, images, URLs and file paths copied from the system.\n- Lets you quickly re-copy any previous item from history.\n- Pin important items so they are never overwritten.\n- Image entries store a thumbnail path and can be previewed on the right.\n- Both list and preview areas use 18px fonts with automatic line wrapping.\n- File entries allow you to re-copy paths even after moving files.\n- Keyword search and type filters: All / Text / Image / URL / File / Pinned.\n- Clipboard preview and list items use word-wrap for long content.\n\n2. Templates & Hotkeys\n- Dedicated \"Templates\" tab for managing common replies and signatures.\n- Add, edit and delete templates freely.\n- Enlarged template editor dialog with auto-wrapping text area.\n- A 3-line preview area (13px font) under the editor for quick review.\n- \"Copy\" button in the editor to send template content directly to clipboard.\n- Templates can be bound to hotkey index 1–9.\n- Global hotkeys Ctrl+Shift+1..9 copy bound templates into the clipboard.\n- Global \"open LightClip\" hotkey is configurable (default: ctrl+shift+c) and supports multi-key combos.\n\n3. UI & Themes\n- Default 18px font size for comfortable long-term use.\n- 6 switchable themes:\n  1) Dark mode.\n  2) Dark reading mode (warm gray).\n  3) Dark cyber blue-green style.\n  4) Light mode.\n  5) Light cream mode.\n  6) Cool light mode.\n- Themes can be switched at runtime without restarting.\n- Settings form spacing adjusted to ~7px per row for better readability.\n\n4. Languages & Icons\n- UI available in Traditional Chinese.\n- UI available in English.\n- Light and dark icon sets based on the maple-leaf + bird clipboard logo.\n\n5. Storage & Data\n- Uses simple JSON files to store settings, history and templates.\n- Automatically creates folders and default files on first run.\n- Images are stored under data/images and referenced by path.\n- Each history entry includes a local timestamp and ISO timestamp.\n\n6. System Tray\n- System tray icon support.\n- Hide window to tray instead of closing the program.\n- Tray menu offers \"Show Window\" and \"Quit\".\n\n7. Docs & Support\n- Top toolbar provides: User Guide, Changelog, Report Issue, Cloud Sync, Settings, About, Help.\n- \"User Guide\" button reads docs/操作說明.txt and shows it in a scrollable dialog.\n- \"Changelog\" button reads docs/更新日誌.txt and shows it in a scrollable dialog.\n- \"Report Issue\" button opens Gmail in the browser with recipient set to trialscales0430@gmail.com.\n\n8. Cloud Sync (local export)\n- Clicking \"Cloud Sync\" generates:\n  - export_history.json (clipboard history).\n  - export_templates.json (templates).\n  - export_settings.json (settings).\n  - lightclip_sync.json (combined file).\n- Place the project or the cloud folder inside any cloud-synced directory (Google Drive, Dropbox, OneDrive, etc.) to have it uploaded by that service.\n\n9. Packaging\n- Can be built into a single EXE with PyInstaller.\n- build_exe.bat helper script for Windows.\n- Inno Setup script (build_installer.iss) to create installers.\n\nThis is the full feature set of LightClip v1.5.\n",
+  "about.docs": "You can open the user guide and changelog via the top toolbar or docs folder.",
+  "help.report.msg": "Opening Gmail in your browser with recipient set to trialscales0430@gmail.com.",
   "docs.user_guide.title": "User Guide",
   "docs.changelog.title": "Changelog",
-  "docs.error": "Failed to read file: {path}"
+  "docs.error": "Failed to read file: {path}",
+  "cloud.sync.title": "Cloud Sync",
+  "cloud.sync.done": "Export files have been written to the cloud folder.\nIf this folder is inside a cloud-sync service, it will be uploaded automatically."
 }

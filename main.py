@@ -24,7 +24,9 @@ DATA_FILE = os.path.join(BASE_DIR, "data", "data.json")
 IMAGE_DIR = os.path.join(BASE_DIR, "data", "images")
 LANG_DIR = os.path.join(BASE_DIR, "languages")
 DOCS_DIR = os.path.join(BASE_DIR, "docs")
+CLOUD_DIR = os.path.join(BASE_DIR, "cloud")
 os.makedirs(IMAGE_DIR, exist_ok=True)
+os.makedirs(CLOUD_DIR, exist_ok=True)
 
 
 def load_icon(theme: str) -> QIcon:
@@ -41,6 +43,7 @@ class TextDialog(QDialog):
     def __init__(self, title: str, content: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
+        self.resize(800, 600)
         layout = QVBoxLayout(self)
 
         scroll = QScrollArea()
@@ -58,10 +61,86 @@ class TextDialog(QDialog):
         layout.addWidget(scroll)
 
         btns = QDialogButtonBox(QDialogButtonBox.Close)
+        btn_close = btns.button(QDialogButtonBox.Close)
+        if btn_close:
+            btn_close.setText("關閉")
         btns.rejected.connect(self.reject)
         btns.accepted.connect(self.accept)
-        btns.button(QDialogButtonBox.Close).setText("關閉")
         layout.addWidget(btns)
+
+
+class TemplateEditorDialog(QDialog):
+    def __init__(self, title: str, name: str = "", content: str = "", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(700, 500)
+        self._content_copied = False
+
+        layout = QVBoxLayout(self)
+
+        form = QFormLayout()
+        form.setVerticalSpacing(7)
+        form.setHorizontalSpacing(7)
+
+        self.ed_name = QLineEdit()
+        self.ed_name.setText(name)
+
+        self.ed_content = QTextEdit()
+        self.ed_content.setPlainText(content)
+        self.ed_content.setLineWrapMode(QTextEdit.WidgetWidth)
+
+        form.addRow(Language.T("tpl.input.name"), self.ed_name)
+        form.addRow(Language.T("tpl.input.content"), self.ed_content)
+
+        layout.addLayout(form)
+
+        # preview area (at least 3 lines, 13px)
+        self.preview = QTextEdit()
+        self.preview.setReadOnly(True)
+        font = self.preview.font()
+        font.setPointSize(13)
+        self.preview.setFont(font)
+        self.preview.setFixedHeight(80)
+        self.preview.setPlainText(content)
+        layout.addWidget(self.preview)
+
+        # buttons: Copy + OK/Cancel
+        btn_layout = QHBoxLayout()
+        self.btn_copy = QPushButton("複製 / Copy")
+        self.btn_copy.clicked.connect(self.copy_content)
+        btn_layout.addWidget(self.btn_copy)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_ok = btns.button(QDialogButtonBox.Ok)
+        btn_cancel = btns.button(QDialogButtonBox.Cancel)
+        if btn_ok:
+            btn_ok.setText(Language.T("settings.ok"))
+        if btn_cancel:
+            btn_cancel.setText(Language.T("settings.cancel"))
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+        self.ed_content.textChanged.connect(self._update_preview)
+
+    def _update_preview(self):
+        self.preview.setPlainText(self.ed_content.toPlainText())
+
+    def copy_content(self):
+        text = self.ed_content.toPlainText()
+        if text and QApplication.clipboard():
+            QApplication.clipboard().setText(text)
+            self._content_copied = True
+
+    @property
+    def name(self) -> str:
+        return self.ed_name.text().strip()
+
+    @property
+    def content(self) -> str:
+        return self.ed_content.toPlainText()
 
 
 class SettingsDialog(QDialog):
@@ -69,6 +148,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.storage = storage
         self.setWindowTitle(Language.T("settings.title"))
+        self.resize(420, 260)
         layout = QVBoxLayout(self)
 
         form = QFormLayout()
@@ -103,10 +183,15 @@ class SettingsDialog(QDialog):
         self.spin_max.setRange(10, 10000)
         self.spin_max.setValue(self.storage.max_entries)
 
+        self.ed_hotkey = QLineEdit()
+        self.ed_hotkey.setText(self.storage.open_hotkey)
+        self.ed_hotkey.setPlaceholderText("ctrl+shift+c")
+
         form.addRow(Language.T("settings.language"), self.cmb_lang)
         form.addRow(Language.T("settings.theme"), self.cmb_theme)
         form.addRow(Language.T("settings.icon_theme"), self.cmb_icon)
         form.addRow(Language.T("settings.max_entries"), self.spin_max)
+        form.addRow(Language.T("settings.open_hotkey"), self.ed_hotkey)
 
         layout.addLayout(form)
 
@@ -122,11 +207,13 @@ class SettingsDialog(QDialog):
         theme_key = self.cmb_theme.currentData()
         icon_theme = self.cmb_icon.currentData()
         max_entries = self.spin_max.value()
+        hotkey = self.ed_hotkey.text().strip() or "ctrl+shift+c"
 
         self.storage.language = lang
         self.storage.theme = theme_key
         self.storage.icon_theme = icon_theme
         self.storage.max_entries = max_entries
+        self.storage.open_hotkey = hotkey
 
 
 class MainWindow(QMainWindow):
@@ -155,6 +242,7 @@ class MainWindow(QMainWindow):
 
         self.apply_theme()
 
+        # Menu bar kept for completeness, but main operations moved to top bar
         menubar = self.menuBar()
         menu_settings = menubar.addMenu(Language.T("menu.settings"))
         menu_about = menubar.addMenu(Language.T("menu.about"))
@@ -177,24 +265,34 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout()
         central.setLayout(main_layout)
 
+        # Top buttons row: user guide, changelog, issue, cloud, settings, about, help
         top_btn_layout = QHBoxLayout()
         self.btn_user_guide = QPushButton(Language.T("top.user_guide"))
         self.btn_changelog = QPushButton(Language.T("top.changelog"))
         self.btn_issue = QPushButton(Language.T("top.issue"))
+        self.btn_cloud = QPushButton(Language.T("top.cloud"))
+        self.btn_top_settings = QPushButton(Language.T("top.settings"))
+        self.btn_top_about = QPushButton(Language.T("top.about"))
+        self.btn_top_help = QPushButton(Language.T("top.help"))
 
         self.btn_user_guide.clicked.connect(self.open_user_guide)
         self.btn_changelog.clicked.connect(self.open_changelog)
         self.btn_issue.clicked.connect(self.open_report_email)
+        self.btn_cloud.clicked.connect(self.perform_cloud_sync)
+        self.btn_top_settings.clicked.connect(self.show_settings)
+        self.btn_top_about.clicked.connect(self.show_about)
+        self.btn_top_help.clicked.connect(self.open_user_guide)
 
-        top_btn_layout.addWidget(self.btn_user_guide)
-        top_btn_layout.addWidget(self.btn_changelog)
-        top_btn_layout.addWidget(self.btn_issue)
+        for b in (self.btn_user_guide, self.btn_changelog, self.btn_issue, self.btn_cloud,
+                  self.btn_top_settings, self.btn_top_about, self.btn_top_help):
+            top_btn_layout.addWidget(b)
         top_btn_layout.addStretch()
         main_layout.addLayout(top_btn_layout)
 
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
+        # Clipboard tab
         clip_tab = QWidget()
         clip_layout = QVBoxLayout()
         clip_tab.setLayout(clip_layout)
@@ -215,9 +313,12 @@ class MainWindow(QMainWindow):
         ])
         self.filter_combo.currentIndexChanged.connect(self.refresh_clipboard_list)
 
-        search_layout.addWidget(QLabel(Language.T("label.search")))
+        lbl_search = QLabel(Language.T("label.search"))
+        lbl_type = QLabel(Language.T("label.type"))
+
+        search_layout.addWidget(lbl_search)
         search_layout.addWidget(self.search_edit)
-        search_layout.addWidget(QLabel(Language.T("label.type")))
+        search_layout.addWidget(lbl_type)
         search_layout.addWidget(self.filter_combo)
         clip_layout.addLayout(search_layout)
 
@@ -272,6 +373,7 @@ class MainWindow(QMainWindow):
 
         self.tabs.addTab(clip_tab, Language.T("tab.clipboard"))
 
+        # Templates tab
         tpl_tab = QWidget()
         tpl_layout = QVBoxLayout()
         tpl_tab.setLayout(tpl_layout)
@@ -334,10 +436,18 @@ class MainWindow(QMainWindow):
         except Exception:
             return
 
-        keyboard.add_hotkey('ctrl+shift+c', lambda: QTimer.singleShot(0, self.show_normal_from_tray))
+        open_hotkey = self.storage.open_hotkey or "ctrl+shift+c"
+        try:
+            keyboard.add_hotkey(open_hotkey, lambda: QTimer.singleShot(0, self.show_normal_from_tray))
+        except Exception:
+            # fallback
+            keyboard.add_hotkey("ctrl+shift+c", lambda: QTimer.singleShot(0, self.show_normal_from_tray))
 
         for i in range(1, 10):
-            keyboard.add_hotkey(f'ctrl+shift+{i}', lambda idx=i: QTimer.singleShot(0, lambda: self.apply_template_hotkey(idx)))
+            try:
+                keyboard.add_hotkey(f'ctrl+shift+{i}', lambda idx=i: QTimer.singleShot(0, lambda: self.apply_template_hotkey(idx)))
+            except Exception:
+                pass
 
     def apply_template_hotkey(self, idx: int):
         tpl = self.storage.find_template_by_hotkey(idx)
@@ -369,6 +479,8 @@ class MainWindow(QMainWindow):
             )
         else:
             super().closeEvent(event)
+
+    # Clipboard list / filter
 
     def get_filtered_entries(self) -> List[ClipEntry]:
         keyword = self.search_edit.text().strip().lower()
@@ -412,7 +524,10 @@ class MainWindow(QMainWindow):
         entries = self.get_filtered_entries()
         for e in entries:
             ts = e.timestamp_local
-            base = f"[{e.type}] {ts} - {e.content}"
+            content_preview = e.content.replace("\n", " ")
+            if len(content_preview) > 80:
+                content_preview = content_preview[:80] + "..."
+            base = f"[{e.type}] {ts} - {content_preview}"
             item_text = base
             if e.pinned:
                 item_text = "📌 " + item_text
@@ -467,6 +582,8 @@ class MainWindow(QMainWindow):
                     self.image_label.setVisible(True)
         else:
             self.preview_area.setPlainText(entry.content)
+
+    # Clipboard actions
 
     def toggle_pin(self):
         entry = self.current_clipboard_entry()
@@ -564,6 +681,8 @@ class MainWindow(QMainWindow):
         self.storage.add_entry(new_entry)
         self.refresh_clipboard_list()
 
+    # Templates
+
     def refresh_template_list(self):
         self.tpl_list.clear()
         templates = self.storage.get_templates()
@@ -586,30 +705,31 @@ class MainWindow(QMainWindow):
         return None
 
     def add_template(self):
-        name, ok = QInputDialog.getText(self, Language.T("tab.templates"), Language.T("tpl.input.name"))
-        if not ok or not name.strip():
-            return
-        content, ok = QInputDialog.getMultiLineText(self, Language.T("tab.templates"), Language.T("tpl.input.content"))
-        if not ok:
-            return
-        tpl = TemplateEntry(id=self.storage.next_template_id(), name=name.strip(), content=content, hotkey_index=None)
-        self.storage.add_template(tpl)
-        self.refresh_template_list()
+        dlg = TemplateEditorDialog(Language.T("button.tpl.add"), "", "", self)
+        if dlg.exec_() == QDialog.Accepted:
+            if not dlg.name:
+                return
+            tpl = TemplateEntry(
+                id=self.storage.next_template_id(),
+                name=dlg.name,
+                content=dlg.content,
+                hotkey_index=None
+            )
+            self.storage.add_template(tpl)
+            self.refresh_template_list()
 
     def edit_template(self):
         tpl = self.current_template()
         if not tpl:
             return
-        name, ok = QInputDialog.getText(self, Language.T("tab.templates"), Language.T("tpl.input.name"), text=tpl.name)
-        if not ok or not name.strip():
-            return
-        content, ok = QInputDialog.getMultiLineText(self, Language.T("tab.templates"), Language.T("tpl.input.content"), text=tpl.content)
-        if not ok:
-            return
-        tpl.name = name.strip()
-        tpl.content = content
-        self.storage.update_template(tpl)
-        self.refresh_template_list()
+        dlg = TemplateEditorDialog(Language.T("button.tpl.edit"), tpl.name, tpl.content, self)
+        if dlg.exec_() == QDialog.Accepted:
+            if not dlg.name:
+                return
+            tpl.name = dlg.name
+            tpl.content = dlg.content
+            self.storage.update_template(tpl)
+            self.refresh_template_list()
 
     def delete_template(self):
         tpl = self.current_template()
@@ -642,6 +762,8 @@ class MainWindow(QMainWindow):
             tpl.hotkey_index = idx
         self.storage.update_template(tpl)
         self.refresh_template_list()
+
+    # Settings / About / Docs / Cloud
 
     def show_settings(self):
         dlg = SettingsDialog(self.storage, self)
@@ -713,6 +835,10 @@ class MainWindow(QMainWindow):
         self.btn_user_guide.setText(Language.T("top.user_guide"))
         self.btn_changelog.setText(Language.T("top.changelog"))
         self.btn_issue.setText(Language.T("top.issue"))
+        self.btn_cloud.setText(Language.T("top.cloud"))
+        self.btn_top_settings.setText(Language.T("top.settings"))
+        self.btn_top_about.setText(Language.T("top.about"))
+        self.btn_top_help.setText(Language.T("top.help"))
 
     def show_about(self):
         text = Language.T("about.text") + "\n\n" + Language.T("about.docs")
@@ -721,7 +847,8 @@ class MainWindow(QMainWindow):
 
     def open_report_email(self):
         QMessageBox.information(self, Language.T("menu.help.report"), Language.T("help.report.msg"))
-        url = QUrl("mailto:trialscales0430@gmail.com?subject=LightClip%20v1.4%20%E5%95%8F%E9%A1%8C%E5%9B%9E%E5%A0%B1")
+        # Open Gmail compose with recipient
+        url = QUrl("https://mail.google.com/mail/u/0/?tab=rm&ogbl&view=cm&fs=1&to=trialscales0430@gmail.com&su=LightClip%20v1.5%20%E5%95%8F%E9%A1%8C%E5%9B%9E%E5%A0%B1")
         QDesktopServices.openUrl(url)
 
     def open_doc_file(self, filename_key: str, title_key: str):
@@ -741,6 +868,39 @@ class MainWindow(QMainWindow):
 
     def open_changelog(self):
         self.open_doc_file("更新日誌.txt", "docs.changelog.title")
+
+    def perform_cloud_sync(self):
+        # Export history, templates, settings into CLOUD_DIR
+        from app.models import ClipEntry, TemplateEntry  # type: ignore
+
+        data_history = [e.to_dict() for e in self.storage.get_entries()]
+        data_templates = [t.to_dict() for t in self.storage.get_templates()]
+        data_settings = self.storage.data.get("settings", {})
+
+        export_history = os.path.join(CLOUD_DIR, "export_history.json")
+        export_templates = os.path.join(CLOUD_DIR, "export_templates.json")
+        export_settings = os.path.join(CLOUD_DIR, "export_settings.json")
+        export_all = os.path.join(CLOUD_DIR, "lightclip_sync.json")
+
+        payload_all = {
+            "version": "1.5.0",
+            "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "history": data_history,
+            "templates": data_templates,
+            "settings": data_settings,
+        }
+
+        import json
+        with open(export_history, "w", encoding="utf-8") as f:
+            json.dump(data_history, f, ensure_ascii=False, indent=2)
+        with open(export_templates, "w", encoding="utf-8") as f:
+            json.dump(data_templates, f, ensure_ascii=False, indent=2)
+        with open(export_settings, "w", encoding="utf-8") as f:
+            json.dump(data_settings, f, ensure_ascii=False, indent=2)
+        with open(export_all, "w", encoding="utf-8") as f:
+            json.dump(payload_all, f, ensure_ascii=False, indent=2)
+
+        QMessageBox.information(self, Language.T("cloud.sync.title"), Language.T("cloud.sync.done"))
 
 
 def main():

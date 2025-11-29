@@ -1,5 +1,5 @@
 
-# LightClip v1.4 - 多主題剪貼簿工具（VS Code / EXE 支援）
+# LightClip v1.5 - 多主題剪貼簿工具（VS Code / EXE 支援）
 
 本專案為 Python 3.13 + PyQt5 撰寫的輕量剪貼簿工具，特色：
 
@@ -10,7 +10,8 @@
 - 大字版 UI：預設 18px，適合長時間閱讀
 - JSON 儲存：完全本機，不連網
 - 系統托盤：可縮小於托盤，熱鍵呼叫
-- 全域快捷鍵：Ctrl+Shift+C 叫出視窗，Ctrl+Shift+1~9 貼上模板
+- 全域快捷鍵：可自訂開啟程式熱鍵 + Ctrl+Shift+1~9 模板快捷貼上
+- 雲端同步：在 cloud 資料夾匯出 JSON，可搭配任意雲端同步服務
 - VS Code 友善：適合編輯 / 除錯 / 打包 EXE
 
 ## 安裝相依套件
