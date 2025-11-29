@@ -20,7 +20,7 @@ from app.language import LanguageManager, _, init_language_manager
 from app.theme import ThemeManager
 from app.cloud_sync import CloudSync
 
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.6.1a"
 
 
 class TextViewerDialog(QDialog):
@@ -331,7 +331,6 @@ class LightClipWindow(QMainWindow):
         self.clip_preview_text.setReadOnly(True)
         self.clip_preview_text.setPlaceholderText(_("clipboard.preview_placeholder"))
 
-        from PyQt6.QtWidgets import QLabel
         self.clip_preview_image = QLabel(self)
         self.clip_preview_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.clip_preview_image.setVisible(False)
