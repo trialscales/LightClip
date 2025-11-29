@@ -7,7 +7,6 @@ from pathlib import Path
 class ThemeManager:
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
-        # 定義多組主題（與你之前給的色票相符的簡化版）
         self.themes = {
             "dark_default": {
                 "name": "Dark · 深灰黑",
@@ -82,7 +81,6 @@ class ThemeManager:
         text_sub = t["text_sub"]
         accent = t["accent"]
 
-        # QMenuBar 跟著主題切換顏色
         css = f"""
         QWidget {{
             background-color: {bg};
@@ -114,23 +112,17 @@ class ThemeManager:
             color: #ffffff;
         }}
         QPushButton:hover {{
-            background-color: {accent};
             opacity: 0.9;
         }}
-        QMenuBar {{
+        QMenu {{
             background-color: {bg_alt};
             color: {text};
         }}
-        QMenuBar::item {{
-            background: transparent;
-            padding: 4px 10px;
-        }}
-        QMenuBar::item:selected {{
+        QMenu::item:selected {{
             background: {panel};
         }}
-        QStatusBar {{
+        QSystemTrayIcon {{
             background: {bg_alt};
-            color: {text_sub};
         }}
         """
         return css

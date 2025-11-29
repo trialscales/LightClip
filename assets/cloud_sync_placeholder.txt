@@ -1,0 +1,1 @@
+請將你 AI 生成的雲端同步 LOGO 圖示存成 PNG，覆蓋為 assets/cloud_sync.png。
