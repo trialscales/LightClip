@@ -7,7 +7,7 @@ from app.models import ClipEntry, TemplateEntry
 DEFAULT_DATA = {
     "settings": {
         "max_entries": 100,
-        "theme": "dark",
+        "theme": "dark_default",
         "language": "zh_TW",
         "icon_theme": "light",
         "hotkeys": {
@@ -20,8 +20,6 @@ DEFAULT_DATA = {
 
 
 class Storage:
-    """負責 JSON 讀寫與資料管理。"""
-
     def __init__(self, data_path: str):
         self.data_path = data_path
         self.data = json.loads(json.dumps(DEFAULT_DATA, ensure_ascii=False))
@@ -48,8 +46,6 @@ class Storage:
         self.data["templates"] = [t.to_dict() for t in self.templates]
         with open(self.data_path, "w", encoding="utf-8") as f:
             json.dump(self.data, f, ensure_ascii=False, indent=2)
-
-    # ---- 設定 ----
 
     @property
     def max_entries(self) -> int:
@@ -80,14 +76,12 @@ class Storage:
 
     @property
     def theme(self) -> str:
-        return self.data.get("settings", {}).get("theme", "dark")
+        return self.data.get("settings", {}).get("theme", "dark_default")
 
     @theme.setter
-    def theme(self, theme: str):
-        self.data.setdefault("settings", {})["theme"] = theme
+    def theme(self, theme_key: str):
+        self.data.setdefault("settings", {})["theme"] = theme_key
         self._save()
-
-    # ---- 剪貼簿 entries ----
 
     def get_entries(self) -> List[ClipEntry]:
         return list(self.entries)
@@ -121,8 +115,6 @@ class Storage:
         else:
             self.entries = []
         self._save()
-
-    # ---- 模板 Templates ----
 
     def get_templates(self) -> List[TemplateEntry]:
         return list(self.templates)

@@ -1,7 +1,7 @@
 {
   "settings": {
     "max_entries": 100,
-    "theme": "dark",
+    "theme": "dark_default",
     "language": "zh_TW",
     "icon_theme": "light",
     "hotkeys": {

@@ -1,16 +1,17 @@
 
-# LightClip v1.2 - 多語系剪貼簿工具（含模板與設定頁）
+# LightClip v1.3 - 多主題剪貼簿工具（VS Code / EXE 支援）
 
-本專案是 Python 3.13 + PyQt5 的輕量剪貼簿工具，提供：
+本專案為 Python 3.13 + PyQt5 撰寫的輕量剪貼簿工具，特色：
 
-- 剪貼簿歷史記錄（文字 / 圖片 / 網址 / 檔案）
-- 多語系 UI（繁體中文 / English）
-- 深色 / 淺色 UI 主題與圖示主題
-- 常用模板管理（可設定 1~9 對應 Ctrl+Shift+數字）
-- JSON 本機儲存資料
-- 系統托盤常駐
-- 設定頁（語言 / 主題 / 最大筆數...）
-- 關於視窗
+- 剪貼簿歷史：自動記錄文字 / 圖片 / 網址 / 檔案路徑
+- 模板系統：常用句子、簽名、客服回覆、可綁定快捷鍵 1~9
+- 多主題：6 組深色 / 淺色 / 科技感 / 奶油系主題
+- 多語系：繁體中文 / English
+- 大字版 UI：預設 18px，適合長時間閱讀
+- JSON 儲存：完全本機，不連網
+- 系統托盤：可縮小於托盤，熱鍵呼叫
+- 全域快捷鍵：Ctrl+Shift+C 叫出視窗，Ctrl+Shift+1~9 貼上模板
+- VS Code 友善：適合編輯 / 除錯 / 打包 EXE
 
 ## 安裝相依套件
 
@@ -18,18 +19,22 @@
 pip install -r requirements.txt
 ```
 
-## 執行原始碼
+## 在 VS Code 執行
+
+1. 用 VS Code 開啟資料夾 `LightClip_v1_3`
+2. 選擇 Python 3.13 直譯器
+3. 執行：
 
 ```bash
 python main.py
 ```
 
-## 打包 EXE
+## 打包為 EXE
 
 ```bash
 build_exe.bat
 ```
 
-會產生 `dist/LightClip/LightClip.exe`。
+完成後可在 `dist/LightClip/LightClip.exe` 找到執行檔。
 
-如需安裝程式，請安裝 Inno Setup，使用 `build_installer.iss` 進行打包。
+若要建立安裝程式，請使用 `build_installer.iss` 搭配 Inno Setup Compiler。

@@ -5,14 +5,14 @@ from typing import List, Dict, Any, Optional
 
 @dataclass
 class ClipEntry:
-    """剪貼簿單筆資料模型。"""
     id: int
-    type: str               # text / image / url / file
-    content: str            # 文字內容 / 路徑 / URL
-    timestamp: str          # 字串時間
+    type: str
+    content: str
+    timestamp_local: str
+    timestamp_iso: str
     pinned: bool = False
     tags: List[str] = None
-    extra: Dict[str, Any] = None  # 額外資料，例如縮圖路徑等
+    extra: Dict[str, Any] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -24,11 +24,14 @@ class ClipEntry:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "ClipEntry":
+        ts_local = data.get("timestamp_local") or data.get("timestamp") or ""
+        ts_iso = data.get("timestamp_iso") or ""
         return ClipEntry(
             id=data.get("id", 0),
             type=data.get("type", "text"),
             content=data.get("content", ""),
-            timestamp=data.get("timestamp", ""),
+            timestamp_local=ts_local,
+            timestamp_iso=ts_iso,
             pinned=data.get("pinned", False),
             tags=data.get("tags") or [],
             extra=data.get("extra") or {},
@@ -37,11 +40,10 @@ class ClipEntry:
 
 @dataclass
 class TemplateEntry:
-    """常用模板資料模型。"""
     id: int
     name: str
     content: str
-    hotkey_index: Optional[int] = None  # 1~9 對應 Ctrl+Shift+數字
+    hotkey_index: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

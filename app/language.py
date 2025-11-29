@@ -5,7 +5,6 @@ from typing import Dict
 
 
 class Language:
-    """簡單的多語系管理器。"""
     _texts: Dict[str, str] = {}
     _code: str = "zh_TW"
 

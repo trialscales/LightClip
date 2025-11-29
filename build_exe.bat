@@ -1,6 +1,6 @@
 
 @echo off
-echo Building LightClip v1.2 EXE...
+echo Building LightClip v1.3 EXE...
 
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist

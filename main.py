@@ -4,8 +4,8 @@ import sys
 import datetime
 from typing import List
 
-from PyQt5.QtCore import Qt, QTimer, QSize
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtCore import Qt, QTimer, QSize, QUrl
+from PyQt5.QtGui import QIcon, QPixmap, QDesktopServices
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QLineEdit, QPushButton, QLabel,
@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
 from app.storage import Storage
 from app.models import ClipEntry, TemplateEntry
 from app.language import Language
+from app.theme import build_stylesheet, THEMES
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "data", "data.json")
@@ -44,7 +45,6 @@ class SettingsDialog(QDialog):
 
         form = QFormLayout()
 
-        # Language
         self.cmb_lang = QComboBox()
         self.cmb_lang.addItem(Language.T("settings.language.zh"), "zh_TW")
         self.cmb_lang.addItem(Language.T("settings.language.en"), "en_US")
@@ -52,15 +52,16 @@ class SettingsDialog(QDialog):
         if idx >= 0:
             self.cmb_lang.setCurrentIndex(idx)
 
-        # Theme
         self.cmb_theme = QComboBox()
-        self.cmb_theme.addItem(Language.T("settings.theme.light"), "light")
-        self.cmb_theme.addItem(Language.T("settings.theme.dark"), "dark")
-        idx = self.cmb_theme.findData(self.storage.theme)
+        theme_key = self.storage.theme
+        for key in THEMES.keys():
+            text_key = f"settings.theme.{key}"
+            label = Language.T(text_key, THEMES[key]["name"])
+            self.cmb_theme.addItem(label, key)
+        idx = self.cmb_theme.findData(theme_key)
         if idx >= 0:
             self.cmb_theme.setCurrentIndex(idx)
 
-        # Icon theme
         self.cmb_icon = QComboBox()
         self.cmb_icon.addItem(Language.T("settings.icon.light"), "light")
         self.cmb_icon.addItem(Language.T("settings.icon.dark"), "dark")
@@ -68,7 +69,6 @@ class SettingsDialog(QDialog):
         if idx >= 0:
             self.cmb_icon.setCurrentIndex(idx)
 
-        # Max entries
         self.spin_max = QSpinBox()
         self.spin_max.setRange(10, 10000)
         self.spin_max.setValue(self.storage.max_entries)
@@ -89,12 +89,12 @@ class SettingsDialog(QDialog):
 
     def apply(self):
         lang = self.cmb_lang.currentData()
-        theme = self.cmb_theme.currentData()
+        theme_key = self.cmb_theme.currentData()
         icon_theme = self.cmb_icon.currentData()
         max_entries = self.spin_max.value()
 
         self.storage.language = lang
-        self.storage.theme = theme
+        self.storage.theme = theme_key
         self.storage.icon_theme = icon_theme
         self.storage.max_entries = max_entries
 
@@ -104,7 +104,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.storage = Storage(DATA_FILE)
 
-        # 語系載入
         Language.load(self.storage.language, LANG_DIR)
 
         self.clipboard = QApplication.clipboard()
@@ -118,8 +117,6 @@ class MainWindow(QMainWindow):
         self.refresh_clipboard_list()
         self.refresh_template_list()
 
-    # ---------------- UI 初始化 -----------------
-
     def init_ui(self):
         self.setWindowTitle(Language.T("app.title"))
         icon = load_icon(self.storage.icon_theme)
@@ -128,10 +125,10 @@ class MainWindow(QMainWindow):
 
         self.apply_theme()
 
-        # Menu
         menubar = self.menuBar()
         menu_settings = menubar.addMenu(Language.T("menu.settings"))
         menu_about = menubar.addMenu(Language.T("menu.about"))
+        menu_help = menubar.addMenu(Language.T("menu.help"))
 
         act_settings = QAction(Language.T("menu.settings"), self)
         act_settings.triggered.connect(self.show_settings)
@@ -141,16 +138,18 @@ class MainWindow(QMainWindow):
         act_about.triggered.connect(self.show_about)
         menu_about.addAction(act_about)
 
+        act_report = QAction(Language.T("menu.help.report"), self)
+        act_report.triggered.connect(self.open_report_email)
+        menu_help.addAction(act_report)
+
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout()
         central.setLayout(main_layout)
 
-        # Tabs
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        # --- Clipboard tab ---
         clip_tab = QWidget()
         clip_layout = QVBoxLayout()
         clip_tab.setLayout(clip_layout)
@@ -226,7 +225,6 @@ class MainWindow(QMainWindow):
 
         self.tabs.addTab(clip_tab, Language.T("tab.clipboard"))
 
-        # --- Templates tab ---
         tpl_tab = QWidget()
         tpl_layout = QVBoxLayout()
         tpl_tab.setLayout(tpl_layout)
@@ -254,29 +252,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(tpl_tab, Language.T("tab.templates"))
 
     def apply_theme(self):
-        if self.storage.theme == "dark":
-            self.setStyleSheet("""
-                QMainWindow { background-color: #2b2b2b; color: #eeeeee; }
-                QWidget { background-color: #2b2b2b; color: #eeeeee; }
-                QLineEdit, QTextEdit, QListWidget, QComboBox, QSpinBox {
-                    background-color: #3c3f41;
-                    color: #eeeeee;
-                    border: 1px solid #555555;
-                }
-                QPushButton {
-                    background-color: #555555;
-                    color: #ffffff;
-                    border: 1px solid #777777;
-                    padding: 4px 8px;
-                }
-                QPushButton:hover {
-                    background-color: #666666;
-                }
-            """)
-        else:
-            self.setStyleSheet("")
-
-    # ---------------- 托盤 -----------------
+        theme_key = self.storage.theme
+        self.setStyleSheet(build_stylesheet(theme_key))
 
     def init_tray(self):
         self.tray = QSystemTrayIcon(self)
@@ -306,14 +283,12 @@ class MainWindow(QMainWindow):
 
     def init_global_hotkeys(self):
         try:
-            import keyboard  # type: ignore
+            import keyboard
         except Exception:
             return
 
-        # 開啟視窗
         keyboard.add_hotkey('ctrl+shift+c', lambda: QTimer.singleShot(0, self.show_normal_from_tray))
 
-        # 模板 1~9
         for i in range(1, 10):
             keyboard.add_hotkey(f'ctrl+shift+{i}', lambda idx=i: QTimer.singleShot(0, lambda: self.apply_template_hotkey(idx)))
 
@@ -348,8 +323,6 @@ class MainWindow(QMainWindow):
         else:
             super().closeEvent(event)
 
-    # ------------- Clipboard 列表與預覽 ---------------
-
     def get_filtered_entries(self) -> List[ClipEntry]:
         keyword = self.search_edit.text().strip().lower()
         f = self.filter_combo.currentText()
@@ -379,7 +352,7 @@ class MainWindow(QMainWindow):
             for e in filtered:
                 text = (e.content or "").lower()
                 tags = " ".join(e.tags or []).lower()
-                if keyword in text or keyword in tags or keyword in (e.timestamp or "").lower():
+                if keyword in text or keyword in tags or keyword in e.timestamp_local.lower():
                     result.append(e)
             filtered = result
 
@@ -391,7 +364,8 @@ class MainWindow(QMainWindow):
 
         entries = self.get_filtered_entries()
         for e in entries:
-            display = f"[{e.type}] {e.content}"
+            ts = e.timestamp_local
+            display = f"[{e.type}] {ts} - {e.content}"
             if len(display) > 60:
                 display = display[:57] + "..."
             item = QListWidgetItem(display)
@@ -448,8 +422,6 @@ class MainWindow(QMainWindow):
         else:
             self.preview_area.setPlainText(entry.content)
 
-    # ------------- Clipboard 操作 ---------------
-
     def toggle_pin(self):
         entry = self.current_clipboard_entry()
         if not entry:
@@ -495,8 +467,6 @@ class MainWindow(QMainWindow):
             self.storage.clear_history(keep_pinned=True)
             self.refresh_clipboard_list()
 
-    # ------------- 剪貼簿監聽 ---------------
-
     def on_clipboard_changed(self):
         mime = self.clipboard.mimeData()
         if mime is None:
@@ -510,8 +480,8 @@ class MainWindow(QMainWindow):
             entry_type = "image"
             image = self.clipboard.image()
             if not image.isNull():
-                now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                img_path = os.path.join(IMAGE_DIR, f"clip_{now}.png")
+                now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                img_path = os.path.join(IMAGE_DIR, f"clip_{now_str}.png")
                 image.save(img_path, "PNG")
                 content = img_path
                 extra["image_path"] = img_path
@@ -531,20 +501,22 @@ class MainWindow(QMainWindow):
         if not entry_type or not content:
             return
 
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.datetime.now().astimezone()
+        ts_local = now.strftime("%Y-%m-%d %H:%M:%S")
+        ts_iso = now.isoformat(timespec="seconds")
+
         new_entry = ClipEntry(
             id=self.storage.next_entry_id(),
             type=entry_type,
             content=content,
-            timestamp=timestamp,
+            timestamp_local=ts_local,
+            timestamp_iso=ts_iso,
             pinned=False,
             tags=[],
             extra=extra
         )
         self.storage.add_entry(new_entry)
         self.refresh_clipboard_list()
-
-    # ------------- 模板管理 ---------------
 
     def refresh_template_list(self):
         self.tpl_list.clear()
@@ -619,14 +591,11 @@ class MainWindow(QMainWindow):
             return
         idx, ok = QInputDialog.getInt(self, Language.T("tab.templates"), Language.T("tpl.input.hotkey"), value=tpl.hotkey_index or 1, min=1, max=9)
         if not ok:
-            # 取消視為清除快捷鍵
             tpl.hotkey_index = None
         else:
             tpl.hotkey_index = idx
         self.storage.update_template(tpl)
         self.refresh_template_list()
-
-    # ------------- 設定 & 關於 ---------------
 
     def show_settings(self):
         dlg = SettingsDialog(self.storage, self)
@@ -649,6 +618,7 @@ class MainWindow(QMainWindow):
         menubar.clear()
         menu_settings = menubar.addMenu(Language.T("menu.settings"))
         menu_about = menubar.addMenu(Language.T("menu.about"))
+        menu_help = menubar.addMenu(Language.T("menu.help"))
 
         act_settings = QAction(Language.T("menu.settings"), self)
         act_settings.triggered.connect(self.show_settings)
@@ -657,6 +627,10 @@ class MainWindow(QMainWindow):
         act_about = QAction(Language.T("menu.about"), self)
         act_about.triggered.connect(self.show_about)
         menu_about.addAction(act_about)
+
+        act_report = QAction(Language.T("menu.help.report"), self)
+        act_report.triggered.connect(self.open_report_email)
+        menu_help.addAction(act_report)
 
         self.tabs.setTabText(0, Language.T("tab.clipboard"))
         self.tabs.setTabText(1, Language.T("tab.templates"))
@@ -674,7 +648,7 @@ class MainWindow(QMainWindow):
         self.btn_tpl_hotkey.setText(Language.T("button.tpl.hotkey"))
 
         self.search_edit.setPlaceholderText(Language.T("label.search") + " ...")
-        # 重建 filter combo
+
         current_index = self.filter_combo.currentIndex()
         self.filter_combo.blockSignals(True)
         self.filter_combo.clear()
@@ -691,14 +665,20 @@ class MainWindow(QMainWindow):
             self.filter_combo.setCurrentIndex(current_index)
 
     def show_about(self):
-        QMessageBox.information(self, Language.T("about.title"), Language.T("about.text"))
+        text = Language.T("about.text") + "\n\n" + Language.T("about.docs")
+        QMessageBox.information(self, Language.T("about.title"), text)
+
+    def open_report_email(self):
+        QMessageBox.information(self, Language.T("menu.help.report"), Language.T("help.report.msg"))
+        url = QUrl("mailto:trialscales0430@gmail.com?subject=LightClip%20v1.3%20問題回報")
+        QDesktopServices.openUrl(url)
 
 
 def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     win = MainWindow()
-    win.resize(960, 640)
+    win.resize(1000, 680)
     win.show()
     sys.exit(app.exec_())
 

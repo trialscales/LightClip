@@ -1,11 +1,11 @@
 
 [Setup]
 AppName=LightClip
-AppVersion=1.2.0
+AppVersion=1.3.0
 DefaultDirName={pf}\LightClip
 DefaultGroupName=LightClip
 OutputDir=Output
-OutputBaseFilename=LightClip_Setup
+OutputBaseFilename=LightClip_v1_3_Setup
 SetupIconFile=assets\icons\light\icon.ico
 Compression=lzma
 SolidCompression=yes
