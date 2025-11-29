@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "max_entries": 100,
+    "theme": "dark",
+    "hotkeys": {
+      "open": "Ctrl+Shift+C"
+    }
+  },
+  "entries": []
+}
