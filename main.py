@@ -5,6 +5,7 @@ import sys
 import uuid
 from pathlib import Path
 from typing import Optional
+from functools import partial
 
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QAction, QIcon, QPixmap
@@ -310,6 +311,7 @@ class LightClipWindow(QMainWindow):
         self.google_sync = GoogleDriveSync(base_dir)
         self.global_hotkey_registered = False
         self.current_image_path: Optional[Path] = None
+        self._writing_clipboard = False
 
         # OCR & translation engines
         self.ocr_engine = OCREngine(base_dir)
@@ -400,6 +402,9 @@ class LightClipWindow(QMainWindow):
 
         self._init_clipboard_page()
         self._init_templates_page()
+
+        self._init_categories_page()
+        self._init_screenshot_page()
 
     def switch_tab(self, index: int):
         self.stack.setCurrentIndex(index)
@@ -596,7 +601,7 @@ class LightClipWindow(QMainWindow):
                 lw_item = QListWidgetItem(target_list)
                 lw_item.setData(Qt.ItemDataRole.UserRole, item.get("id"))
                 card = self._build_card_for_item(item)
-                card.btn_pin.clicked.connect(lambda checked=False, cid=item.get("id"): self.toggle_pin_by_id(cid))
+                card.btn_pin.clicked.connect(partial(self.toggle_pin_by_id, item.get("id")))
                 target_list.setItemWidget(lw_item, card)
                 lw_item.setSizeHint(card.sizeHint())
 
@@ -673,7 +678,9 @@ class LightClipWindow(QMainWindow):
         if not clip:
             return
         text = clip.get("full_text", "")
+        self._writing_clipboard = True
         QApplication.clipboard().setText(text)
+        QTimer.singleShot(120, lambda: setattr(self, "_writing_clipboard", False))
 
 def translate_selected_clip(self):
     """Translate current clip (text or image via OCR) and show result in a dialog."""
@@ -749,6 +756,14 @@ def translate_selected_clip(self):
         cid = self.get_selected_clip_id()
         if not cid:
             return
+        clip = self.storage.get_clipboard_item(cid)
+        if clip and clip.get("type") == "image":
+            path = clip.get("image_path")
+            if path:
+                from pathlib import Path as _P
+                p = _P(path)
+                if p.exists():
+                    p.unlink()
         self.storage.delete_clipboard_item(cid)
         self.storage.save_all()
         self.refresh_clipboard_lists()
@@ -1008,6 +1023,8 @@ def translate_selected_clip(self):
         self._last_clip_signature = None
 
     def on_clipboard_changed(self):
+        if getattr(self, "_writing_clipboard", False):
+            return
         cb = QApplication.clipboard()
         mime = cb.mimeData()
 
@@ -1156,9 +1173,7 @@ def translate_selected_clip(self):
             lw_item = QListWidgetItem(self.list_category_items)
             lw_item.setData(Qt.ItemDataRole.UserRole, clip.get("id"))
             card = self._build_card_for_item(clip)
-            card.btn_pin.clicked.connect(
-                lambda checked=False, cid=clip.get("id"): self.toggle_pin_by_id(cid)
-            )
+            card.btn_pin.clicked.connect(partial(self.toggle_pin_by_id, clip.get("id")))
             self.list_category_items.setItemWidget(lw_item, card)
             lw_item.setSizeHint(card.sizeHint())
 
@@ -1225,9 +1240,7 @@ def translate_selected_clip(self):
             lw_item = QListWidgetItem(self.list_screenshots)
             lw_item.setData(Qt.ItemDataRole.UserRole, clip.get("id"))
             card = self._build_card_for_item(clip)
-            card.btn_pin.clicked.connect(
-                lambda checked=False, cid=clip.get("id"): self.toggle_pin_by_id(cid)
-            )
+            card.btn_pin.clicked.connect(partial(self.toggle_pin_by_id, clip.get("id")))
             self.list_screenshots.setItemWidget(lw_item, card)
             lw_item.setSizeHint(card.sizeHint())
 
@@ -1236,7 +1249,7 @@ def translate_selected_clip(self):
 
     def update_screenshot_preview(self):
         """更新右側截圖預覽，不影響主剪貼簿預覽。"""
-        if not hasattr(self, "label_ss_preview"):
+        if not hasattr(self, "label_ss_preview") or self.label_ss_preview is None:
             return
 
         item = self.list_screenshots.currentItem() if hasattr(self, "list_screenshots") else None

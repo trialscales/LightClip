@@ -1,51 +1,40 @@
-
-/* Modern Rounded + Shadow + Blur-like Semi Transparency */
-
 QWidget {
-    background-color: #1a1a1acc; /* semi-transparent */
+    background-color: #1a1a1acc;
     color: #E8E8E8;
     font-family: "Segoe UI", "PingFang TC", sans-serif;
 }
-
 #CardFrame {
     background-color: #2a2a2acc;
     border-radius: 14px;
     padding: 12px;
     border: 1px solid #3c3c3c88;
 }
-
 QPushButton {
     background-color: #2e2e2e;
     border-radius: 10px;
     padding: 8px 14px;
     border: 1px solid #3a3a3a;
 }
-
 QPushButton:hover {
     background-color: #3a3a3a;
 }
-
 QPushButton:pressed {
     background-color: #242424;
 }
-
 QLineEdit, QTextEdit {
     background-color: #2b2b2bcc;
     border-radius: 8px;
     border: 1px solid #3d3d3d;
     padding: 6px 10px;
 }
-
 QListWidget {
     background-color: #1f1f1fcc;
     border: none;
     border-radius: 10px;
 }
-
 QScrollArea {
     background-color: transparent;
 }
-
 QMenu {
     background-color: #2f2f2fcc;
     border-radius: 8px;

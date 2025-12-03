@@ -24,8 +24,6 @@ class OCREngine:
       1. Google Cloud Vision (if installed & GOOGLE_APPLICATION_CREDENTIALS set)
       2. pytesseract + PIL
       3. Fallback: return empty string
-
-    This class is intentionally simple so you can swap implementation easily.
     """
 
     def __init__(self, base_dir: Path) -> None:
@@ -34,7 +32,6 @@ class OCREngine:
     def _google_vision_client(self):
         if vision is None:
             return None
-        # require credentials env var
         if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
             return None
         try:
@@ -43,11 +40,9 @@ class OCREngine:
             return None
 
     def extract_text(self, image_path: Path) -> str:
-        """Extract text from an image file.
-
-        Returns an empty string if OCR is not available.
-        """
-        # Try Google Vision first
+        if not image_path.exists():
+            return ""
+        # Google Vision first
         client = self._google_vision_client()
         if client is not None:
             try:
@@ -55,25 +50,15 @@ class OCREngine:
                     content = f.read()
                 image = vision.Image(content=content)  # type: ignore[attr-defined]
                 response = client.text_detection(image=image)
-                if response.error.message:
-                    # silently fall back
-                    pass
-                else:
-                    annotations = response.text_annotations
-                    if annotations:
-                        return annotations[0].description or ""
+                if not response.error.message and response.text_annotations:
+                    return response.text_annotations[0].description or ""
             except Exception:
-                # fall through to tesseract
                 pass
-
-        # Try pytesseract
+        # Tesseract fallback
         if pytesseract is not None and Image is not None:
             try:
                 img = Image.open(str(image_path))
-                text = pytesseract.image_to_string(img)
-                return text or ""
+                return pytesseract.image_to_string(img) or ""
             except Exception:
                 return ""
-
-        # No OCR backend available
         return ""

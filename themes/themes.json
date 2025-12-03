@@ -6,5 +6,9 @@
   "light_default": {
     "name": "淺色主題",
     "qss": "themes/light_default.qss"
+  },
+  "modern_dark": {
+    "name": "現代深色主題",
+    "qss": "themes/modern_dark.qss"
   }
 }
