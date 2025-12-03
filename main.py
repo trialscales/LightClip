@@ -394,6 +394,10 @@ class LightClipWindow(QMainWindow):
         self._init_clipboard_page()
         self._init_templates_page()
 
+        # init categories and screenshots
+        self._init_categories_page()
+        self._init_screenshot_page()
+
     def switch_tab(self, index: int):
         self.stack.setCurrentIndex(index)
         self.btn_tab_clip.setChecked(index == 0)
