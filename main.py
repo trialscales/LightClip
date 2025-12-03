@@ -44,6 +44,8 @@ from app.language import LanguageManager, _, init_language_manager
 from app.theme import ThemeManager
 from app.cloud_sync import CloudSync
 from app.google_sync import GoogleDriveSync
+from app.ocr_engine import OCREngine
+from app.translator import Translator
 
 APP_VERSION = "1.9"
 
@@ -309,6 +311,11 @@ class LightClipWindow(QMainWindow):
         self.global_hotkey_registered = False
         self.current_image_path: Optional[Path] = None
 
+        # OCR & translation engines
+        self.ocr_engine = OCREngine(base_dir)
+        self.translator = Translator(self.storage.settings.get("language", "zh_TW"))
+
+
         init_language_manager(lang_mgr)
 
         self.setWindowTitle(_("app.title"))
@@ -394,10 +401,6 @@ class LightClipWindow(QMainWindow):
         self._init_clipboard_page()
         self._init_templates_page()
 
-        # init categories and screenshots
-        self._init_categories_page()
-        self._init_screenshot_page()
-
     def switch_tab(self, index: int):
         self.stack.setCurrentIndex(index)
         self.btn_tab_clip.setChecked(index == 0)
@@ -455,10 +458,12 @@ class LightClipWindow(QMainWindow):
         self.btn_clip_delete = QPushButton(_("clipboard.delete"), self)
         self.btn_clip_pin = QPushButton(_("clipboard.pin"), self)
         self.btn_clip_category = QPushButton(_("clipboard.category"), self)
+        self.btn_clip_translate = QPushButton("翻譯", self)
         btn_row.addWidget(self.btn_clip_copy)
         btn_row.addWidget(self.btn_clip_delete)
         btn_row.addWidget(self.btn_clip_pin)
         btn_row.addWidget(self.btn_clip_category)
+        btn_row.addWidget(self.btn_clip_translate)
         right.addLayout(btn_row)
 
         self.clip_preview_text = QTextEdit(self)
@@ -488,6 +493,7 @@ class LightClipWindow(QMainWindow):
         self.btn_clip_delete.clicked.connect(self.delete_selected_clip)
         self.btn_clip_pin.clicked.connect(self.toggle_pin_selected_clip)
         self.btn_clip_category.clicked.connect(self.change_category_selected_clip)
+        self.btn_clip_translate.clicked.connect(self.translate_selected_clip)
 
         # 可點擊放大圖片
         self.clip_preview_image.mousePressEvent = self.on_image_clicked  # type: ignore[assignment]
@@ -668,6 +674,76 @@ class LightClipWindow(QMainWindow):
             return
         text = clip.get("full_text", "")
         QApplication.clipboard().setText(text)
+
+def translate_selected_clip(self):
+    """Translate current clip (text or image via OCR) and show result in a dialog."""
+    cid = self.get_selected_clip_id()
+    if not cid:
+        return
+    clip = self.storage.get_clipboard_item(cid)
+    if not clip:
+        return
+
+    ctype = clip.get("type", "text")
+    source_text = ""
+
+    try:
+        if ctype == "image":
+            path = clip.get("image_path")
+            if not path:
+                QMessageBox.information(self, "翻譯", "找不到圖片路徑。")
+                return
+            p = Path(path)
+            if not p.exists():
+                QMessageBox.information(self, "翻譯", "圖片檔案不存在。")
+                return
+            source_text = self.ocr_engine.extract_text(p)
+            if not source_text.strip():
+                QMessageBox.information(self, "翻譯", "圖片中未辨識出明顯文字。")
+                return
+        else:
+            source_text = clip.get("full_text", "") or clip.get("preview", "") or ""
+            if not source_text.strip():
+                QMessageBox.information(self, "翻譯", "此項目沒有可翻譯的文字內容。")
+                return
+
+        ui_lang = self.storage.settings.get("language", "zh_TW")
+        # default: if UI is Chinese, translate to English; otherwise translate to Traditional Chinese
+        target_lang = "en" if ui_lang.startswith("zh") else "zh-TW"
+
+        translated = self.translator.translate(source_text, target_lang=target_lang)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("翻譯結果")
+        lay = QVBoxLayout(dlg)
+
+        src_label = QLabel("原文：", dlg)
+        src_edit = QTextEdit(dlg)
+        src_edit.setReadOnly(True)
+        src_edit.setPlainText(source_text.strip())
+
+        dst_label = QLabel(f"翻譯（{target_lang}）：", dlg)
+        dst_edit = QTextEdit(dlg)
+        dst_edit.setReadOnly(True)
+        dst_edit.setPlainText(translated.strip())
+
+        lay.addWidget(src_label)
+        lay.addWidget(src_edit)
+        lay.addWidget(dst_label)
+        lay.addWidget(dst_edit)
+
+        btn_row = QHBoxLayout()
+        btn_ok = QPushButton("關閉", dlg)
+        btn_row.addStretch(1)
+        btn_row.addWidget(btn_ok)
+        lay.addLayout(btn_row)
+
+        btn_ok.clicked.connect(dlg.accept)
+
+        dlg.resize(640, 480)
+        dlg.exec()
+    except Exception as e:
+        QMessageBox.warning(self, "翻譯", f"翻譯過程發生錯誤：{e}")
 
     def delete_selected_clip(self):
         cid = self.get_selected_clip_id()
