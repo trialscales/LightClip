@@ -1,0 +1,13 @@
+{
+  "language": "zh_TW",
+  "theme": "light_default",
+  "max_history": 100,
+  "global_hotkey_enabled": false,
+  "global_hotkey": "ctrl+shift+v",
+  "categories": [
+    "文字",
+    "圖片",
+    "檔案",
+    "未分類"
+  ]
+}

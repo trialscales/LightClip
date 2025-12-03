@@ -1,0 +1,1 @@
+def capture(): pass

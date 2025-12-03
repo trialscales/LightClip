@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QStackedWidget,
     QScrollArea,
+    QSplitter,
 )
 
 try:
@@ -339,12 +340,16 @@ class LightClipWindow(QMainWindow):
 
         self.btn_tab_clip = QPushButton(_("ui.tab.clipboard"), self)
         self.btn_tab_tpl = QPushButton(_("ui.tab.templates"), self)
-        for btn in (self.btn_tab_clip, self.btn_tab_tpl):
+        self.btn_tab_category = QPushButton("分類", self)
+        self.btn_tab_screenshot = QPushButton("截圖", self)
+        for btn in (self.btn_tab_clip, self.btn_tab_tpl, self.btn_tab_category, self.btn_tab_screenshot):
             btn.setCheckable(True)
             btn.setFlat(True)
         self.btn_tab_clip.setChecked(True)
         top.addWidget(self.btn_tab_clip)
         top.addWidget(self.btn_tab_tpl)
+        top.addWidget(self.btn_tab_category)
+        top.addWidget(self.btn_tab_screenshot)
         top.addStretch(1)
 
         # cloud button
@@ -373,12 +378,18 @@ class LightClipWindow(QMainWindow):
         self.stack = QStackedWidget(self)
         self.page_clipboard = QWidget(self)
         self.page_templates = QWidget(self)
-        self.stack.addWidget(self.page_clipboard)
-        self.stack.addWidget(self.page_templates)
+        self.page_categories = QWidget(self)
+        self.page_screenshots = QWidget(self)
+        self.stack.addWidget(self.page_clipboard)    # index 0
+        self.stack.addWidget(self.page_templates)    # index 1
+        self.stack.addWidget(self.page_categories)   # index 2
+        self.stack.addWidget(self.page_screenshots)  # index 3
         root.addWidget(self.stack)
 
         self.btn_tab_clip.clicked.connect(lambda: self.switch_tab(0))
         self.btn_tab_tpl.clicked.connect(lambda: self.switch_tab(1))
+        self.btn_tab_category.clicked.connect(lambda: self.switch_tab(2))
+        self.btn_tab_screenshot.clicked.connect(lambda: self.switch_tab(3))
 
         self._init_clipboard_page()
         self._init_templates_page()
@@ -387,6 +398,8 @@ class LightClipWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         self.btn_tab_clip.setChecked(index == 0)
         self.btn_tab_tpl.setChecked(index == 1)
+        self.btn_tab_category.setChecked(index == 2)
+        self.btn_tab_screenshot.setChecked(index == 3)
 
     def _init_clipboard_page(self):
         layout = QVBoxLayout(self.page_clipboard)
@@ -580,6 +593,12 @@ class LightClipWindow(QMainWindow):
         add_items_to_list(self.list_pinned, pinned_items)
         add_items_to_list(self.clip_list, normal_items)
 
+        # 更新分類與截圖分頁
+        if hasattr(self, "page_categories"):
+            self.refresh_categories_page()
+        if hasattr(self, "page_screenshots"):
+            self.refresh_screenshot_page()
+
     def _infer_category(self, item) -> str:
         ctype = item.get("type", "text")
         if ctype == "image":
@@ -595,7 +614,18 @@ class LightClipWindow(QMainWindow):
         self.update_clip_preview_by_id(cid)
 
     def get_selected_clip_id(self) -> Optional[str]:
-        cur = self.list_pinned.currentItem()
+        cur = None
+        # 分類分頁：優先取分類列表的選中項目
+        if hasattr(self, "page_categories") and self.stack.currentWidget() is self.page_categories:
+            if hasattr(self, "list_category_items"):
+                cur = self.list_category_items.currentItem()
+        # 截圖分頁：取截圖列表選中項目
+        if cur is None and hasattr(self, "page_screenshots") and self.stack.currentWidget() is self.page_screenshots:
+            if hasattr(self, "list_screenshots"):
+                cur = self.list_screenshots.currentItem()
+        # 其他情況：沿用原本 pinned + 主列表邏輯
+        if cur is None:
+            cur = self.list_pinned.currentItem()
         if cur is None:
             cur = self.clip_list.currentItem()
         if cur is None:
@@ -949,6 +979,228 @@ class LightClipWindow(QMainWindow):
     # ---------- main ----------
 
 
+
+
+    
+    # === Categories & Screenshot Pages ===
+
+    def _init_categories_page(self):
+        """分類分頁：左側分類列表，右側該分類項目列表（共用下方預覽區）。"""
+        layout = QVBoxLayout(self.page_categories)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal, self.page_categories)
+        layout.addWidget(splitter, 1)
+
+        # 左側分類列表
+        self.list_categories = QListWidget(self)
+        self.list_categories.setFixedWidth(140)
+        splitter.addWidget(self.list_categories)
+
+        # 右側該分類項目列表
+        self.list_category_items = ClipListWidget(self)
+        splitter.addWidget(self.list_category_items)
+
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+
+        # 下方操作列
+        btn_row = QHBoxLayout()
+        self.btn_cat_copy = QPushButton("複製", self)
+        self.btn_cat_delete = QPushButton("刪除", self)
+        self.btn_cat_pin = QPushButton("釘選 / 取消釘選", self)
+        btn_row.addWidget(self.btn_cat_copy)
+        btn_row.addWidget(self.btn_cat_delete)
+        btn_row.addWidget(self.btn_cat_pin)
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        # 事件
+        self.list_categories.currentItemChanged.connect(self.on_category_selected)
+        self.list_category_items.itemSelectionChanged.connect(self.on_clip_selection_changed)
+        self.list_category_items.itemDoubleClicked.connect(self.copy_selected_clip)
+
+        self.btn_cat_copy.clicked.connect(self.copy_selected_clip)
+        self.btn_cat_delete.clicked.connect(self.delete_selected_clip)
+        self.btn_cat_pin.clicked.connect(self.toggle_pin_selected_clip)
+
+        # 初始資料
+        self.refresh_categories_page()
+
+    def refresh_categories_page(self):
+        """重建分類列表與右側內容。"""
+        if not hasattr(self, "list_categories"):
+            return
+
+        by_cat = {}
+        for clip in self.storage.clipboard_items:
+            cat = clip.get("category") or self._infer_category(clip) or "未分類"
+            by_cat.setdefault(cat, []).append(clip)
+
+        # 左側分類列表
+        self.list_categories.blockSignals(True)
+        self.list_categories.clear()
+        for cat in sorted(by_cat.keys()):
+            self.list_categories.addItem(cat)
+        self.list_categories.blockSignals(False)
+
+        # 如果沒有選擇，就自動選第一個
+        if self.list_categories.currentItem() is None and self.list_categories.count() > 0:
+            self.list_categories.setCurrentRow(0)
+
+        self._rebuild_category_items(by_cat)
+
+    def on_category_selected(self, current, previous):
+        if not current:
+            return
+        by_cat = {}
+        for clip in self.storage.clipboard_items:
+            cat = clip.get("category") or self._infer_category(clip) or "未分類"
+            by_cat.setdefault(cat, []).append(clip)
+        self._rebuild_category_items(by_cat)
+
+    def _rebuild_category_items(self, by_cat: dict):
+        if not hasattr(self, "list_category_items"):
+            return
+        cat_item = self.list_categories.currentItem()
+        if not cat_item:
+            self.list_category_items.clear()
+            return
+
+        cat_name = cat_item.text()
+        items = by_cat.get(cat_name, [])
+
+        self.list_category_items.clear()
+        for clip in items:
+            lw_item = QListWidgetItem(self.list_category_items)
+            lw_item.setData(Qt.ItemDataRole.UserRole, clip.get("id"))
+            card = self._build_card_for_item(clip)
+            card.btn_pin.clicked.connect(
+                lambda checked=False, cid=clip.get("id"): self.toggle_pin_by_id(cid)
+            )
+            self.list_category_items.setItemWidget(lw_item, card)
+            lw_item.setSizeHint(card.sizeHint())
+
+    def _init_screenshot_page(self):
+        """截圖分頁：左側圖片型項目列表，右側獨立大圖預覽。"""
+        layout = QVBoxLayout(self.page_screenshots)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal, self.page_screenshots)
+        layout.addWidget(splitter, 1)
+
+        # 左側：所有圖片項目
+        self.list_screenshots = ClipListWidget(self)
+        splitter.addWidget(self.list_screenshots)
+
+        # 右側：大圖預覽
+        right = QWidget(self)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(4, 4, 4, 4)
+        right_layout.setSpacing(4)
+
+        self.label_ss_preview = QLabel("選擇左側截圖以預覽", self)
+        self.label_ss_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label_ss_preview.setMinimumSize(320, 240)
+        self.label_ss_preview.setFrameShape(QFrame.Shape.StyledPanel)
+        right_layout.addWidget(self.label_ss_preview, 1)
+
+        splitter.addWidget(right)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+
+        # 下方操作列
+        btn_row = QHBoxLayout()
+        self.btn_ss_copy = QPushButton("複製", self)
+        self.btn_ss_delete = QPushButton("刪除", self)
+        self.btn_ss_pin = QPushButton("釘選 / 取消釘選", self)
+        btn_row.addWidget(self.btn_ss_copy)
+        btn_row.addWidget(self.btn_ss_delete)
+        btn_row.addWidget(self.btn_ss_pin)
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        # 事件
+        self.list_screenshots.itemSelectionChanged.connect(self.update_screenshot_preview)
+        self.list_screenshots.itemDoubleClicked.connect(self.copy_selected_clip)
+
+        self.btn_ss_copy.clicked.connect(self.copy_selected_clip)
+        self.btn_ss_delete.clicked.connect(self.delete_selected_clip)
+        self.btn_ss_pin.clicked.connect(self.toggle_pin_selected_clip)
+
+        # 初始資料
+        self.refresh_screenshot_page()
+
+    def refresh_screenshot_page(self):
+        """刷新截圖分頁：列出所有圖片型項目。"""
+        if not hasattr(self, "list_screenshots"):
+            return
+
+        self.list_screenshots.clear()
+        for clip in self.storage.clipboard_items:
+            if clip.get("type") != "image":
+                continue
+            lw_item = QListWidgetItem(self.list_screenshots)
+            lw_item.setData(Qt.ItemDataRole.UserRole, clip.get("id"))
+            card = self._build_card_for_item(clip)
+            card.btn_pin.clicked.connect(
+                lambda checked=False, cid=clip.get("id"): self.toggle_pin_by_id(cid)
+            )
+            self.list_screenshots.setItemWidget(lw_item, card)
+            lw_item.setSizeHint(card.sizeHint())
+
+        # 更新右側預覽
+        self.update_screenshot_preview()
+
+    def update_screenshot_preview(self):
+        """更新右側截圖預覽，不影響主剪貼簿預覽。"""
+        if not hasattr(self, "label_ss_preview"):
+            return
+
+        item = self.list_screenshots.currentItem() if hasattr(self, "list_screenshots") else None
+        if item is None:
+            self.label_ss_preview.setText("選擇左側截圖以預覽")
+            self.label_ss_preview.setPixmap(QPixmap())
+            return
+
+        cid = item.data(Qt.ItemDataRole.UserRole)
+        clip = self.storage.get_clipboard_item(cid)
+        if not clip or clip.get("type") != "image":
+            self.label_ss_preview.setText("非圖片項目")
+            self.label_ss_preview.setPixmap(QPixmap())
+            return
+
+        path = clip.get("image_path")
+        if not path:
+            self.label_ss_preview.setText("找不到圖片檔案")
+            self.label_ss_preview.setPixmap(QPixmap())
+            return
+
+        p = Path(path)
+        if not p.exists():
+            self.label_ss_preview.setText("找不到圖片檔案")
+            self.label_ss_preview.setPixmap(QPixmap())
+            return
+
+        pix = QPixmap(str(p))
+        if pix.isNull():
+            self.label_ss_preview.setText("無法載入圖片")
+            self.label_ss_preview.setPixmap(QPixmap())
+            return
+
+        target_size = self.label_ss_preview.size()
+        if target_size.width() <= 0 or target_size.height() <= 0:
+            self.label_ss_preview.setPixmap(pix)
+            return
+
+        scaled = pix.scaled(
+            target_size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.label_ss_preview.setPixmap(scaled)
 def main():
     base_dir = ensure_base_dir()
     app = QApplication(sys.argv)
@@ -969,3 +1221,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
