@@ -1,116 +1,153 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Any
 
 
 class ThemeManager:
-    def __init__(self):
-        self.themes: Dict[str, Dict[str, str]] = {
-            "dark_default": {
-                "name": "Dark · Obsidian",
-                "bg": "#121212",
-                "bg_alt": "#1E1E1E",
-                "panel": "#1F1F23",
-                "text": "#F5F5F5",
-                "text_sub": "#A1A1AA",
-                "accent": "#4D9FFF",
-            },
-            "light_default": {
-                "name": "Light · Soft",
-                "bg": "#F5F5F7",
-                "bg_alt": "#E8E8EA",
-                "panel": "#FFFFFF",
-                "text": "#2E2E2E",
-                "text_sub": "#6A6A6A",
-                "accent": "#4D89FF",
-            },
+    """Simple theme manager backed by a JSON config + QSS files.
+
+    Expected project structure (relative to this file):
+
+        <project_root>/
+          main.py
+          app/
+            theme.py   <- this file
+          themes/
+            themes.json
+            dark_default.qss
+            light_default.qss
+            ...
+
+    themes.json format:
+
+        {
+          "dark_default": {
+            "name": "深色主題",
+            "qss": "themes/dark_default.qss"
+          },
+          "light_default": {
+            "name": "淺色主題",
+            "qss": "themes/light_default.qss"
+          }
         }
-        self.current_key = "dark_default"
+
+    This class is designed to stay compatible with existing usage in main.py:
+        - ThemeManager()
+        - theme_mgr.themes  (dict with key -> {"name": str, ...})
+        - theme_mgr.set_theme(key)
+        - css = theme_mgr.build_stylesheet()
+    """
+
+    def __init__(self) -> None:
+        # project root: .../app/theme.py -> project_root
+        self.base_dir: Path = Path(__file__).resolve().parent.parent
+        self.themes: Dict[str, Dict[str, Any]] = {}
+        self.current_theme_key: str | None = None
+        self._load_themes()
+
+    # -------- internal helpers --------
+
+    def _themes_json_path(self) -> Path:
+        return self.base_dir / "themes" / "themes.json"
+
+    def _load_themes(self) -> None:
+        """Load themes from JSON file, with safe fallback."""
+        path = self._themes_json_path()
+        if not path.exists():
+            # fallback: built-in single dark theme
+            self.themes = {
+                "dark_default": {
+                    "name": "深色預設",
+                    "qss": "themes/dark_default.qss",
+                }
+            }
+            self.current_theme_key = "dark_default"
+            return
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                self.themes = data
+            else:
+                raise ValueError("themes.json must be an object")
+        except Exception:
+            # when JSON is invalid, keep a safe default
+            self.themes = {
+                "dark_default": {
+                    "name": "深色預設",
+                    "qss": "themes/dark_default.qss",
+                }
+            }
+
+        # pick first theme as default if not set
+        if self.themes:
+            self.current_theme_key = next(iter(self.themes.keys()))
+        else:
+            self.current_theme_key = None
+
+    # -------- public API --------
 
     def set_theme(self, key: str) -> None:
-        if key not in self.themes:
-            key = "dark_default"
-        self.current_key = key
+        """Set current theme key (must exist in self.themes)."""
+        if key in self.themes:
+            self.current_theme_key = key
+        # if not found, keep previous theme; don't raise to avoid crashing
 
     def build_stylesheet(self) -> str:
-        t = self.themes[self.current_key]
-        bg = t["bg"]
-        bg_alt = t["bg_alt"]
-        panel = t["panel"]
-        text = t["text"]
-        text_sub = t["text_sub"]
-        accent = t["accent"]
+        """Return the concatenated QSS for the current theme.
 
-        css = f"""
-        QWidget {{
-            background-color: {bg};
-            color: {text};
-            font-size: 18px;
-        }}
-        QMainWindow {{
-            background-color: {bg};
-        }}
-        QTabWidget::pane {{
-            border: 1px solid {bg_alt};
-            border-radius: 10px;
-            margin-top: 4px;
-        }}
-        QTabBar::tab {{
-            background: {bg_alt};
-            padding: 8px 18px;
-            border-top-left-radius: 10px;
-            border-top-right-radius: 10px;
-            margin-right: 2px;
-        }}
-        QTabBar::tab:selected {{
-            background: {panel};
-        }}
-        QListWidget {{
-            background: transparent;
-            border: none;
-        }}
-        QTextEdit, QLineEdit {{
-            background: {panel};
-            border: 1px solid {bg_alt};
-            border-radius: 8px;
-            padding: 6px 10px;
-        }}
-        QPushButton {{
-            background-color: {accent};
-            border: none;
-            padding: 8px 14px;
-            color: #ffffff;
-            border-radius: 8px;
-        }}
-        QPushButton:hover {{
-            background-color: {text_sub};
-        }}
-        QPushButton:flat {{
-            background-color: transparent;
-            border: none;
-            color: {text};
-        }}
-        QMenu {{
-            background-color: {bg_alt};
-            color: {text};
-            border: 1px solid {panel};
-            border-radius: 8px;
-        }}
-        QMenu::item {{
-            padding: 6px 16px;
-        }}
-        QMenu::item:selected {{
-            background: {panel};
-        }}
-        QLabel#metaLabel {{
-            color: {text_sub};
-            font-size: 14px;
-        }}
-        QFrame#CardFrame {{
-            background-color: {panel};
-            border-radius: 10px;
-            border: 1px solid {bg_alt};
-        }}
+        If the theme defines a 'qss' field pointing to a file, that QSS is loaded.
+        If loading fails, a minimal safe fallback stylesheet is returned.
         """
-        return css
+        if not self.current_theme_key or self.current_theme_key not in self.themes:
+            return self._fallback_qss()
+
+        theme = self.themes[self.current_theme_key]
+        qss_rel = theme.get("qss")
+        if not qss_rel:
+            return self._fallback_qss()
+
+        qss_path = self.base_dir / qss_rel
+        if not qss_path.exists():
+            return self._fallback_qss()
+
+        try:
+            return qss_path.read_text(encoding="utf-8")
+        except Exception:
+            return self._fallback_qss()
+
+    # -------- fallback --------
+
+    def _fallback_qss(self) -> str:
+        """Minimal dark-ish fallback styling so the app remains usable."""
+        return (
+            "QWidget {"
+            "  background-color: #202020;"
+            "  color: #E0E0E0;"
+            "}"
+            "QPushButton {"
+            "  background-color: #2A2A2A;"
+            "  border: 1px solid #444444;"
+            "  padding: 4px 8px;"
+            "  border-radius: 4px;"
+            "}"
+            "QLineEdit, QTextEdit {"
+            "  background-color: #252525;"
+            "  border: 1px solid #444444;"
+            "  border-radius: 4px;"
+            "  padding: 4px;"
+            "}"
+            "#CardFrame {"
+            "  background-color: #252525;"
+            "  border-radius: 10px;"
+            "}"
+            "#metaLabel {"
+            "  color: #A0A0A0;"
+            "}"
+        )
+
+
+# For type checkers / external imports
+__all__ = ["ThemeManager"]

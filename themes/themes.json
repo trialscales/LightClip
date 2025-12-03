@@ -1,0 +1,10 @@
+{
+  "dark_default": {
+    "name": "深色主題",
+    "qss": "themes/dark_default.qss"
+  },
+  "light_default": {
+    "name": "淺色主題",
+    "qss": "themes/light_default.qss"
+  }
+}

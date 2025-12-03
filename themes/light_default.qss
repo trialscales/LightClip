@@ -1,0 +1,35 @@
+/* Light default theme */
+QWidget {
+    background-color: #F5F5F5;
+    color: #202020;
+    font-family: "Segoe UI", "PingFang TC", sans-serif;
+}
+QPushButton {
+    background-color: #FFFFFF;
+    border: 1px solid #D0D0D0;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+QPushButton:hover {
+    background-color: #F0F0F0;
+}
+QLineEdit, QTextEdit {
+    background-color: #FFFFFF;
+    border: 1px solid #D0D0D0;
+    border-radius: 4px;
+    padding: 4px;
+}
+QListWidget {
+    background-color: #FFFFFF;
+    border: 1px solid #E0E0E0;
+}
+QScrollArea {
+    background-color: #F5F5F5;
+}
+#CardFrame {
+    background-color: #FFFFFF;
+    border-radius: 10px;
+}
+#metaLabel {
+    color: #808080;
+}

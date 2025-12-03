@@ -1,4 +1,4 @@
-
+/* Dark default theme */
 QWidget {
     background-color: #1E1E1E;
     color: #E0E0E0;
