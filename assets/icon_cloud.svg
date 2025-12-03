@@ -1,3 +1,5 @@
-<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
-<path fill='#F5F5F5' d='M8.5 19a4.5 4.5 0 01-.45-8.98A5.5 5.5 0 0119 11.5a3.5 3.5 0 01-1 6.9H8.5z'/>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+     xmlns="http://www.w3.org/2000/svg">
+  <path d="M7 17C4.8 17 3 15.2 3 13C3 10.9 4.5 9.2 6.5 8.9C7.1 6.5 9.2 5 11.7 5C14.4 5 16.7 7 17.1 9.6C18.9 10 20.2 11.5 20.2 13.4C20.2 15.6 18.5 17.3 16.3 17.3H7Z"
+        stroke="#E8E8E8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -1,3 +1,6 @@
-<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
-<path fill='#F5F5F5' d='M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a1.25 1.25 0 110 2.5A1.25 1.25 0 0112 6zm1.5 11h-3v-1.5h1v-4h-1V10h2v5.5h1V17z'/>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+     xmlns="http://www.w3.org/2000/svg">
+  <circle cx="12" cy="12" r="8" stroke="#E8E8E8" stroke-width="1.6"/>
+  <path d="M12 10V16" stroke="#E8E8E8" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="12" cy="7" r="1.1" fill="#E8E8E8"/>
 </svg>
