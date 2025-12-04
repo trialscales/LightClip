@@ -1,5 +1,62 @@
 [
   {
+    "id": "3d6cf556-d941-4c7d-8341-90cf04f399a4",
+    "pinned": false,
+    "type": "text",
+    "full_text": "⦁\t更新 剪貼簿中的分類項目，移至設定區塊\n⦁\t新增 設定的【全域快捷鍵(例:ctrl+shift+v)】下面加上【截圖快捷鍵】\n⦁\t更新 設定的設定的【全域快捷鍵(例:ctrl+shift+v)】，改成【剪貼簿快捷鍵】\n⦁\t更新 雲端功能移置設定區塊\n",
+    "preview": "⦁\t更新 剪貼簿中的分類項目，移至設定區塊 ⦁\t新增 設定的【全域快捷鍵(例:ctrl+shift+v)】下面加上【截圖快捷鍵】 ⦁\t更新 設定的設定的【...",
+    "category": "文字"
+  },
+  {
+    "id": "13bb0225-7f21-4ef4-9a35-57f66407f413",
+    "pinned": false,
+    "type": "text",
+    "full_text": "LightClip_v2_0_1_Project",
+    "preview": "LightClip_v2_0_1_Project",
+    "category": "文字"
+  },
+  {
+    "id": "f8d5b6d9-c2e8-4e41-a678-be1ce024f634",
+    "pinned": false,
+    "type": "image",
+    "image_path": "E:\\Trialscales\\電腦專用_General_Files\\LightClip\\data\\images\\f8d5b6d9-c2e8-4e41-a678-be1ce024f634.png",
+    "full_text": "",
+    "preview": "[圖片] f8d5b6d9-c2e8-4e41-a678-be1ce024f634.png",
+    "category": "圖片"
+  },
+  {
+    "id": "d899d7f1-2c8c-4bc2-bd48-16a24acaa65f",
+    "pinned": false,
+    "type": "text",
+    "full_text": "python main.py",
+    "preview": "python main.py",
+    "category": "文字"
+  },
+  {
+    "id": "bfff059b-7c7d-459c-8f15-afa05eb77824",
+    "pinned": false,
+    "type": "text",
+    "full_text": "我幫你修過的 main_fixed_full.zip 裡的 main.py",
+    "preview": "我幫你修過的 main_fixed_full.zip 裡的 main.py",
+    "category": "文字"
+  },
+  {
+    "id": "d5b550f4-afaf-4a89-bb13-fa06c4344b8e",
+    "pinned": false,
+    "type": "text",
+    "full_text": "開始 LightClip 2.1 整合",
+    "preview": "開始 LightClip 2.1 整合",
+    "category": "文字"
+  },
+  {
+    "id": "bc81dfc5-802e-4284-98bd-3119af9c06d0",
+    "pinned": false,
+    "type": "text",
+    "full_text": "git pull",
+    "preview": "git pull",
+    "category": "文字"
+  },
+  {
     "id": "23ef6f69-b177-405d-ae3e-cfc9a6ef4f82",
     "pinned": false,
     "type": "text",

@@ -5,7 +5,6 @@ import sys
 import uuid
 from pathlib import Path
 from typing import Optional
-from functools import partial
 
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QAction, QIcon, QPixmap
@@ -45,8 +44,6 @@ from app.language import LanguageManager, _, init_language_manager
 from app.theme import ThemeManager
 from app.cloud_sync import CloudSync
 from app.google_sync import GoogleDriveSync
-from app.ocr_engine import OCREngine
-from app.translator import Translator
 
 APP_VERSION = "1.9"
 
@@ -179,13 +176,39 @@ class SettingsDialog(QDialog):
         self.chk_hotkey.setText(_("settings.global_hotkey_enable"))
         layout.addRow(self.chk_hotkey)
 
+        # 剪貼簿快捷鍵
         self.edit_hotkey = QLineEdit(self)
         self.edit_hotkey.setText(storage.settings.get("global_hotkey", "ctrl+shift+v"))
-        layout.addRow(_("settings.global_hotkey"), self.edit_hotkey)
+        layout.addRow("剪貼簿快捷鍵", self.edit_hotkey)
+
+        # 截圖快捷鍵
+        self.edit_screenshot_hotkey = QLineEdit(self)
+        self.edit_screenshot_hotkey.setText(storage.settings.get("screenshot_hotkey", ""))
+        layout.addRow("截圖快捷鍵", self.edit_screenshot_hotkey)
 
         # 分類管理
         self.btn_manage_categories = QPushButton("管理分類…", self)
         layout.addRow(self.btn_manage_categories)
+
+        # Cloud Sync 卡片
+        cloud_frame = QFrame(self)
+        cloud_layout = QVBoxLayout(cloud_frame)
+        cloud_title = QLabel("Cloud Sync", cloud_frame)
+        cloud_title.setStyleSheet("font-weight:600; font-size:14px;")
+        cloud_desc = QLabel("管理剪貼簿資料的匯出 / 上傳 / 下載。", cloud_frame)
+        cloud_desc.setWordWrap(True)
+        cloud_layout.addWidget(cloud_title)
+        cloud_layout.addWidget(cloud_desc)
+
+        cloud_btn_row = QHBoxLayout()
+        self.btn_cloud_export = QPushButton("匯出剪貼簿", cloud_frame)
+        self.btn_cloud_upload = QPushButton("匯出並上傳", cloud_frame)
+        self.btn_cloud_download = QPushButton("從雲端下載", cloud_frame)
+        cloud_btn_row.addWidget(self.btn_cloud_export)
+        cloud_btn_row.addWidget(self.btn_cloud_upload)
+        cloud_btn_row.addWidget(self.btn_cloud_download)
+        cloud_layout.addLayout(cloud_btn_row)
+        layout.addRow(cloud_frame)
 
         btn_row = QHBoxLayout()
         self.btn_apply = QPushButton(_("settings.apply"), self)
@@ -197,6 +220,9 @@ class SettingsDialog(QDialog):
         self.btn_apply.clicked.connect(self.apply)
         self.btn_cancel.clicked.connect(self.reject)
         self.btn_manage_categories.clicked.connect(self.manage_categories)
+        self.btn_cloud_export.clicked.connect(self.on_cloud_export_clicked)
+        self.btn_cloud_upload.clicked.connect(self.on_cloud_upload_clicked)
+        self.btn_cloud_download.clicked.connect(self.on_cloud_download_clicked)
 
     def manage_categories(self):
         # 簡單對話框：一行一個分類
@@ -227,6 +253,18 @@ class SettingsDialog(QDialog):
         dlg.resize(360, 260)
         dlg.exec()
 
+    def on_cloud_export_clicked(self):
+        if getattr(self.parent_window, "on_cloud_export_clicked", None):
+            self.parent_window.on_cloud_export_clicked()
+
+    def on_cloud_upload_clicked(self):
+        if getattr(self.parent_window, "on_cloud_upload_clicked", None):
+            self.parent_window.on_cloud_upload_clicked()
+
+    def on_cloud_download_clicked(self):
+        if getattr(self.parent_window, "on_cloud_download_clicked", None):
+            self.parent_window.on_cloud_download_clicked()
+
     def apply(self):
         self.storage.settings["max_history"] = int(self.spin_history.value())
         lang_code = self.combo_lang.currentData()
@@ -235,6 +273,7 @@ class SettingsDialog(QDialog):
         self.storage.settings["theme"] = theme_key
         self.storage.settings["global_hotkey_enabled"] = self.chk_hotkey.isChecked()
         self.storage.settings["global_hotkey"] = self.edit_hotkey.text().strip() or "ctrl+shift+v"
+        self.storage.settings["screenshot_hotkey"] = self.edit_screenshot_hotkey.text().strip()
         self.storage.save_all()
 
         self.lang_mgr.set_language(lang_code)
@@ -311,12 +350,6 @@ class LightClipWindow(QMainWindow):
         self.google_sync = GoogleDriveSync(base_dir)
         self.global_hotkey_registered = False
         self.current_image_path: Optional[Path] = None
-        self._writing_clipboard = False
-
-        # OCR & translation engines
-        self.ocr_engine = OCREngine(base_dir)
-        self.translator = Translator(self.storage.settings.get("language", "zh_TW"))
-
 
         init_language_manager(lang_mgr)
 
@@ -361,16 +394,6 @@ class LightClipWindow(QMainWindow):
         top.addWidget(self.btn_tab_screenshot)
         top.addStretch(1)
 
-        # cloud button
-        self.btn_cloud = QPushButton(self)
-        self.btn_cloud.setFlat(True)
-        self.btn_cloud.setFixedSize(36, 32)
-        self.btn_cloud.setIconSize(QSize(22, 22))
-        cloud_icon = QIcon(str(self.base_dir / "assets" / "icon_cloud.svg"))
-        self.btn_cloud.setIcon(cloud_icon)
-        self.btn_cloud.clicked.connect(self.on_cloud_sync_clicked)
-        top.addWidget(self.btn_cloud)
-
         # menu button
         self.btn_menu = QPushButton(self)
         self.btn_menu.setFlat(True)
@@ -403,9 +426,6 @@ class LightClipWindow(QMainWindow):
         self._init_clipboard_page()
         self._init_templates_page()
 
-        self._init_categories_page()
-        self._init_screenshot_page()
-
     def switch_tab(self, index: int):
         self.stack.setCurrentIndex(index)
         self.btn_tab_clip.setChecked(index == 0)
@@ -429,12 +449,7 @@ class LightClipWindow(QMainWindow):
         self.btn_clear_history = QPushButton("刪除歷史紀錄", self)
         header.addWidget(self.btn_clear_history)
 
-        header.addSpacing(12)
-        header.addWidget(QLabel("分類：", self))
-        self.combo_category = QComboBox(self)
-        self.refresh_category_combo()
-        header.addWidget(self.combo_category)
-
+        header.addStretch(1)
         layout.addLayout(header)
 
         # pinned list
@@ -463,12 +478,10 @@ class LightClipWindow(QMainWindow):
         self.btn_clip_delete = QPushButton(_("clipboard.delete"), self)
         self.btn_clip_pin = QPushButton(_("clipboard.pin"), self)
         self.btn_clip_category = QPushButton(_("clipboard.category"), self)
-        self.btn_clip_translate = QPushButton("翻譯", self)
         btn_row.addWidget(self.btn_clip_copy)
         btn_row.addWidget(self.btn_clip_delete)
         btn_row.addWidget(self.btn_clip_pin)
         btn_row.addWidget(self.btn_clip_category)
-        btn_row.addWidget(self.btn_clip_translate)
         right.addLayout(btn_row)
 
         self.clip_preview_text = QTextEdit(self)
@@ -488,7 +501,6 @@ class LightClipWindow(QMainWindow):
         # connections
         self.btn_toggle_pin.toggled.connect(self.toggle_pin_section)
         self.btn_clear_history.clicked.connect(self.clear_history)
-        self.combo_category.currentIndexChanged.connect(self.refresh_clipboard_lists)
         self.edit_search.textChanged.connect(self.refresh_clipboard_lists)
 
         self.list_pinned.currentItemChanged.connect(self.on_clip_selection_changed)
@@ -498,7 +510,6 @@ class LightClipWindow(QMainWindow):
         self.btn_clip_delete.clicked.connect(self.delete_selected_clip)
         self.btn_clip_pin.clicked.connect(self.toggle_pin_selected_clip)
         self.btn_clip_category.clicked.connect(self.change_category_selected_clip)
-        self.btn_clip_translate.clicked.connect(self.translate_selected_clip)
 
         # 可點擊放大圖片
         self.clip_preview_image.mousePressEvent = self.on_image_clicked  # type: ignore[assignment]
@@ -538,12 +549,6 @@ class LightClipWindow(QMainWindow):
         self.refresh_template_list()
 
     # ---------- clipboard logic ----------
-    def refresh_category_combo(self):
-        self.combo_category.clear()
-        self.combo_category.addItem("全部", "ALL")
-        for c in self.storage.settings.get("categories", []):
-            self.combo_category.addItem(c, c)
-
     def toggle_pin_section(self, checked: bool):
         self.list_pinned.setVisible(checked)
         self.btn_toggle_pin.setText("📌 釘選項目（展開）" if checked else "📌 釘選項目（收合）")
@@ -567,18 +572,14 @@ class LightClipWindow(QMainWindow):
         if not text:
             text = "(空內容)"
         ctype = item_dict.get("type", "text")
-        category = item_dict.get("category", "")
-        meta_parts = [f"type: {ctype}"]
-        if category:
-            meta_parts.append(f"category: {category}")
-        meta = " | ".join(meta_parts)
+        # 只顯示類型，不顯示分類名稱
+        meta = f"type: {ctype}"
         can_expand = len(text) > 80
         card = ClipCard(self, text, meta, bool(item_dict.get("pinned")), can_expand)
         return card
 
     def refresh_clipboard_lists(self):
         term = self.edit_search.text().strip().lower()
-        current_cat = self.combo_category.currentData()
         self.list_pinned.clear()
         self.clip_list.clear()
 
@@ -589,9 +590,6 @@ class LightClipWindow(QMainWindow):
             text = (item.get("preview") or item.get("full_text") or "").lower()
             if term and term not in text:
                 return False
-            if current_cat and current_cat != "ALL":
-                cat = item.get("category") or self._infer_category(item)
-                return cat == current_cat
             return True
 
         def add_items_to_list(target_list: QListWidget, items):
@@ -601,7 +599,7 @@ class LightClipWindow(QMainWindow):
                 lw_item = QListWidgetItem(target_list)
                 lw_item.setData(Qt.ItemDataRole.UserRole, item.get("id"))
                 card = self._build_card_for_item(item)
-                card.btn_pin.clicked.connect(partial(self.toggle_pin_by_id, item.get("id")))
+                card.btn_pin.clicked.connect(lambda checked=False, cid=item.get("id"): self.toggle_pin_by_id(cid))
                 target_list.setItemWidget(lw_item, card)
                 lw_item.setSizeHint(card.sizeHint())
 
@@ -678,92 +676,12 @@ class LightClipWindow(QMainWindow):
         if not clip:
             return
         text = clip.get("full_text", "")
-        self._writing_clipboard = True
         QApplication.clipboard().setText(text)
-        QTimer.singleShot(120, lambda: setattr(self, "_writing_clipboard", False))
-
-    def translate_selected_clip(self):
-        """Translate current clip (text or image via OCR) and show result in a dialog."""
-        cid = self.get_selected_clip_id()
-        if not cid:
-            return
-        clip = self.storage.get_clipboard_item(cid)
-        if not clip:
-            return
-
-        ctype = clip.get("type", "text")
-        source_text = ""
-
-        try:
-            if ctype == "image":
-                path = clip.get("image_path")
-                if not path:
-                    QMessageBox.information(self, "翻譯", "找不到圖片路徑。")
-                    return
-                p = Path(path)
-                if not p.exists():
-                    QMessageBox.information(self, "翻譯", "圖片檔案不存在。")
-                    return
-                source_text = self.ocr_engine.extract_text(p)
-                if not source_text.strip():
-                    QMessageBox.information(self, "翻譯", "圖片中未辨識出明顯文字。")
-                    return
-            else:
-                source_text = clip.get("full_text", "") or clip.get("preview", "") or ""
-                if not source_text.strip():
-                    QMessageBox.information(self, "翻譯", "此項目沒有可翻譯的文字內容。")
-                    return
-
-            ui_lang = self.storage.settings.get("language", "zh_TW")
-            # default: if UI is Chinese, translate to English; otherwise translate to Traditional Chinese
-            target_lang = "en" if ui_lang.startswith("zh") else "zh-TW"
-
-            translated = self.translator.translate(source_text, target_lang=target_lang)
-
-            dlg = QDialog(self)
-            dlg.setWindowTitle("翻譯結果")
-            lay = QVBoxLayout(dlg)
-
-            src_label = QLabel("原文：", dlg)
-            src_edit = QTextEdit(dlg)
-            src_edit.setReadOnly(True)
-            src_edit.setPlainText(source_text.strip())
-
-            dst_label = QLabel(f"翻譯（{target_lang}）：", dlg)
-            dst_edit = QTextEdit(dlg)
-            dst_edit.setReadOnly(True)
-            dst_edit.setPlainText(translated.strip())
-
-            lay.addWidget(src_label)
-            lay.addWidget(src_edit)
-            lay.addWidget(dst_label)
-            lay.addWidget(dst_edit)
-
-            btn_row = QHBoxLayout()
-            btn_ok = QPushButton("關閉", dlg)
-            btn_row.addStretch(1)
-            btn_row.addWidget(btn_ok)
-            lay.addLayout(btn_row)
-
-            btn_ok.clicked.connect(dlg.accept)
-
-            dlg.resize(640, 480)
-            dlg.exec()
-        except Exception as e:
-            QMessageBox.warning(self, "翻譯", f"翻譯過程發生錯誤：{e}")
 
     def delete_selected_clip(self):
         cid = self.get_selected_clip_id()
         if not cid:
             return
-        clip = self.storage.get_clipboard_item(cid)
-        if clip and clip.get("type") == "image":
-            path = clip.get("image_path")
-            if path:
-                from pathlib import Path as _P
-                p = _P(path)
-                if p.exists():
-                    p.unlink()
         self.storage.delete_clipboard_item(cid)
         self.storage.save_all()
         self.refresh_clipboard_lists()
@@ -965,13 +883,27 @@ class LightClipWindow(QMainWindow):
         url = "https://mail.google.com/mail/?view=cm&to=trialscales0430@gmail.com&su=LightClip%20Feedback"
         webbrowser.open(url)
 
-    def on_cloud_sync_clicked(self):
+    def on_cloud_export_clicked(self):
+        files = self.cloud_sync.export_json()
+        if files:
+            QMessageBox.information(self, "Cloud", "已匯出剪貼簿資料。")
+        else:
+            QMessageBox.information(self, "Cloud", "沒有可匯出的資料。")
+
+    def on_cloud_upload_clicked(self):
         files = self.cloud_sync.export_json()
         try:
             self.google_sync.upload_files(files)
             QMessageBox.information(self, "Cloud", "已匯出資料，並可手動上傳至雲端。")
         except Exception as e:
             QMessageBox.warning(self, "Cloud", f"雲端同步時發生錯誤：{e}")
+
+    def on_cloud_download_clicked(self):
+        QMessageBox.information(self, "Cloud", "從雲端下載的功能尚未實作。")
+
+    # 舊的 API 兼容：保留名稱以避免其他地方呼叫失敗
+    def on_cloud_sync_clicked(self):
+        self.on_cloud_upload_clicked()
 
     def setup_tray(self):
         self.tray = QSystemTrayIcon(self)
@@ -1006,16 +938,35 @@ class LightClipWindow(QMainWindow):
         if not self.storage.settings.get("global_hotkey_enabled", False):
             return
         seq = self.storage.settings.get("global_hotkey", "ctrl+shift+v")
+        ss_seq = (self.storage.settings.get("screenshot_hotkey", "") or "").strip()
 
         def on_hotkey():
+            # 剪貼簿快捷鍵：喚醒視窗
             self.showNormal()
             self.activateWindow()
             self.raise_()
 
+        def on_screenshot_hotkey():
+            # 截圖快捷鍵：喚醒視窗並切換到截圖分頁
+            self.showNormal()
+            self.activateWindow()
+            self.raise_()
+            try:
+                # 截圖分頁在 index 3
+                self.switch_tab(3)
+            except Exception:
+                pass
+
         try:
             keyboard.add_hotkey(seq, on_hotkey)
         except Exception:
-            QMessageBox.warning(self, "Hotkey", "無法註冊全域快捷鍵，請嘗試其他組合或確認系統權限。")
+            QMessageBox.warning(self, "Hotkey", "無法註冊剪貼簿快捷鍵，請嘗試其他組合或確認系統權限。")
+
+        if ss_seq:
+            try:
+                keyboard.add_hotkey(ss_seq, on_screenshot_hotkey)
+            except Exception:
+                QMessageBox.warning(self, "Hotkey", "無法註冊截圖快捷鍵，請嘗試其他組合或確認系統權限。")
 
     def setup_clipboard_listener(self):
         cb = QApplication.clipboard()
@@ -1023,8 +974,6 @@ class LightClipWindow(QMainWindow):
         self._last_clip_signature = None
 
     def on_clipboard_changed(self):
-        if getattr(self, "_writing_clipboard", False):
-            return
         cb = QApplication.clipboard()
         mime = cb.mimeData()
 
@@ -1173,7 +1122,9 @@ class LightClipWindow(QMainWindow):
             lw_item = QListWidgetItem(self.list_category_items)
             lw_item.setData(Qt.ItemDataRole.UserRole, clip.get("id"))
             card = self._build_card_for_item(clip)
-            card.btn_pin.clicked.connect(partial(self.toggle_pin_by_id, clip.get("id")))
+            card.btn_pin.clicked.connect(
+                lambda checked=False, cid=clip.get("id"): self.toggle_pin_by_id(cid)
+            )
             self.list_category_items.setItemWidget(lw_item, card)
             lw_item.setSizeHint(card.sizeHint())
 
@@ -1240,7 +1191,9 @@ class LightClipWindow(QMainWindow):
             lw_item = QListWidgetItem(self.list_screenshots)
             lw_item.setData(Qt.ItemDataRole.UserRole, clip.get("id"))
             card = self._build_card_for_item(clip)
-            card.btn_pin.clicked.connect(partial(self.toggle_pin_by_id, clip.get("id")))
+            card.btn_pin.clicked.connect(
+                lambda checked=False, cid=clip.get("id"): self.toggle_pin_by_id(cid)
+            )
             self.list_screenshots.setItemWidget(lw_item, card)
             lw_item.setSizeHint(card.sizeHint())
 
@@ -1249,7 +1202,7 @@ class LightClipWindow(QMainWindow):
 
     def update_screenshot_preview(self):
         """更新右側截圖預覽，不影響主剪貼簿預覽。"""
-        if not hasattr(self, "label_ss_preview") or self.label_ss_preview is None:
+        if not hasattr(self, "label_ss_preview"):
             return
 
         item = self.list_screenshots.currentItem() if hasattr(self, "list_screenshots") else None
@@ -1314,4 +1267,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
