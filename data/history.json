@@ -1,5 +1,61 @@
 [
   {
+    "id": "23ef6f69-b177-405d-ae3e-cfc9a6ef4f82",
+    "pinned": false,
+    "type": "text",
+    "full_text": "請整合成新版 ZIP",
+    "preview": "請整合成新版 ZIP",
+    "category": "文字"
+  },
+  {
+    "id": "4c6979e0-55bd-4e58-961f-5e968f84153b",
+    "pinned": false,
+    "type": "text",
+    "full_text": "⦁\t刪除 剪貼簿中的釘選項目，只留下頂部的釘選\n⦁\t刪除 剪貼簿中的分類項目\n⦁\t新增 設定的【全域快捷鍵(例:ctrl+shift+v)】下面加上【截圖快捷鍵】\n⦁\t更新 設定的設定的【全域快捷鍵(例:ctrl+shift+v)】，改成【剪貼簿快捷鍵】\n",
+    "preview": "⦁\t刪除 剪貼簿中的釘選項目，只留下頂部的釘選 ⦁\t刪除 剪貼簿中的分類項目 ⦁\t新增 設定的【全域快捷鍵(例:ctrl+shift+v)】下面加上【截圖...",
+    "category": "文字"
+  },
+  {
+    "id": "1eb94fe3-442f-46cf-83c7-79398dce6588",
+    "pinned": false,
+    "type": "text",
+    "full_text": "【全域快捷鍵(例:ctrl+shift+v)】",
+    "preview": "【全域快捷鍵(例:ctrl+shift+v)】",
+    "category": "文字"
+  },
+  {
+    "id": "e9f286fb-0ac3-4999-a735-b2877cf14e33",
+    "pinned": false,
+    "type": "text",
+    "full_text": "新增 設定的【全域快捷鍵(例:ctrl+shift+v)】",
+    "preview": "新增 設定的【全域快捷鍵(例:ctrl+shift+v)】",
+    "category": "文字"
+  },
+  {
+    "id": "1aa5e919-cacf-4403-b96e-f1ae920162ce",
+    "pinned": false,
+    "type": "text",
+    "full_text": "設定的【全域快捷鍵(例:ctrl+shift+v)】",
+    "preview": "設定的【全域快捷鍵(例:ctrl+shift+v)】",
+    "category": "文字"
+  },
+  {
+    "id": "54a8f73e-d0cb-4e10-a1c5-8d7a79eae049",
+    "pinned": false,
+    "type": "text",
+    "full_text": "【全域快捷鍵(例:ctrl+shift+v)】",
+    "preview": "【全域快捷鍵(例:ctrl+shift+v)】",
+    "category": "文字"
+  },
+  {
+    "id": "a9faa4d9-e035-402c-bd7c-cda75bed4f25",
+    "pinned": false,
+    "type": "text",
+    "full_text": "ctrl+shift+v",
+    "preview": "ctrl+shift+v",
+    "category": "文字"
+  },
+  {
     "id": "9e4eebc6-7e03-4a05-9fcd-78802e4b2726",
     "pinned": false,
     "type": "text",

@@ -1,6 +1,6 @@
 {
   "language": "zh_TW",
-  "theme": "dark_cyan",
+  "theme": "light_default",
   "max_history": 100,
   "global_hotkey_enabled": false,
   "global_hotkey": "ctrl+shift+v",
@@ -9,11 +9,5 @@
     "圖片",
     "檔案",
     "未分類"
-  ],
-  "translate_source": "auto",
-  "translate_target": "zh_TW",
-  "screenshot_dir": "",
-  "screenshot_save_to_disk": true,
-  "screenshot_add_to_history": true,
-  "translate_add_to_history": true
+  ]
 }
